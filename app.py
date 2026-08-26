@@ -28,6 +28,10 @@ D2_SCHEMA_RELATIVE_PATH = (
 LEGACY_D2_PATH = HERE / "d2_data_cleaned.csv"
 CORE_V3_MEMBERSHIPS_PATH = HERE / "core_v3_memberships.csv"
 CORE_V3_UNSTABLE_PATH = HERE / "core_v3_under150_unstable_scores_2026.csv"
+HISTORICAL_NEIGHBORS_RELATIVE_PATH = (
+    Path("historical_comps_output")
+    / "d1_historical_neighbors_2026_prior.csv"
+)
 
 
 def resolve_current_d2_schema_path():
@@ -47,6 +51,35 @@ def resolve_core_v3_memberships_path():
 def resolve_core_v3_unstable_path():
     return CORE_V3_UNSTABLE_PATH if CORE_V3_UNSTABLE_PATH.exists() else None
 
+
+def resolve_historical_neighbors_path():
+    direct = HERE.parent / HISTORICAL_NEIGHBORS_RELATIVE_PATH
+    if direct.exists():
+        return direct
+    for base in (HERE, *HERE.parents):
+        candidate = base / HISTORICAL_NEIGHBORS_RELATIVE_PATH
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def load_historical_neighbors():
+    path = resolve_historical_neighbors_path()
+    if path is None:
+        return pd.DataFrame()
+    df = pd.read_csv(path)
+    text_cols = [
+        "target_player_name",
+        "target_team",
+        "match_player_name",
+        "match_team",
+        "match_conf",
+    ]
+    for col in text_cols:
+        if col in df.columns:
+            df[col] = df[col].fillna("").astype(str).str.strip()
+    return df
+
 D2 = load_data(
     str(resolve_current_d2_schema_path()),
     id_prefix="d2p",
@@ -59,6 +92,7 @@ D1 = load_d1_data(
     recruiting_path=str(HERE / "recruiting_rankings_cache.csv"),
 )
 D3 = load_data(str(HERE / "d3_data_cleaned.csv"),          id_prefix="d3p")
+HISTORICAL_NEIGHBORS = load_historical_neighbors()
 
 d2_df         = D2["df"];  d2_conferences = D2["conferences"]
 d2_league_avg = D2["league_avg"];  d2_similar_to = D2["similar_to"]
@@ -923,14 +957,50 @@ SIMILARITY_METRIC_LABELS = {
     "mahalanobis": "Mahalanobis dist. over PC1-PC4",
     "euclidean": "Euclidean dist. over PC1-PC4",
 }
+SIMILARITY_VIEW_LABELS = {
+    "current": "Current players",
+    "historical": "Historical comps",
+}
+
+
+def historical_comps_for_player(row, n_comp: int = 5):
+    if HISTORICAL_NEIGHBORS.empty:
+        return []
+    matches = HISTORICAL_NEIGHBORS[
+        HISTORICAL_NEIGHBORS["target_player_name"].eq(str(row["name"]).strip())
+        & HISTORICAL_NEIGHBORS["target_team"].eq(str(row["team"]).strip())
+    ].copy()
+    if matches.empty:
+        return []
+    matches = matches.sort_values(["match_rank", "distance"]).head(n_comp).reset_index(drop=True)
+    ref_dist = float(matches["distance"].max()) if "distance" in matches.columns else 0.0
+    if not np.isfinite(ref_dist) or ref_dist <= 0:
+        ref_dist = 1.0
+    comps = []
+    for _, comp in matches.iterrows():
+        dist = float(comp.get("distance", np.nan))
+        similarity = max(0.0, 1.0 - (dist / ref_dist)) if np.isfinite(dist) else 0.0
+        comps.append({
+            "rank": int(comp.get("match_rank", len(comps) + 1)),
+            "name": comp.get("match_player_name", ""),
+            "team": comp.get("match_team", ""),
+            "season": int(comp.get("match_season", 0)) if pd.notna(comp.get("match_season", np.nan)) else None,
+            "conf": comp.get("match_conf", ""),
+            "similarity": float(similarity),
+            "distance": dist,
+        })
+    return comps
 
 
 def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, watchlist,
-                      similarity_metric="mahalanobis"):
+                      similarity_metric="mahalanobis", similarity_view="current"):
     row  = df[df["id"] == player_id].iloc[0]
     if similarity_metric not in SIMILARITY_METRIC_LABELS:
         similarity_metric = "mahalanobis"
+    if similarity_view not in SIMILARITY_VIEW_LABELS:
+        similarity_view = "current"
     sims = similar_to_fn(player_id, n_sim=5, metric=similarity_metric)
+    historical_comps = historical_comps_for_player(row) if division_label == "D-I" else []
     pc   = ARCHETYPE_COLOR.get(row["primary_archetype"], POS_COLOR.get(row["pos"], "#888"))
 
     if division_label == "D-I":
@@ -1134,6 +1204,63 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                        ui.span("match", class_="sim-lbl"),
                        class_="sim-pct")))
 
+    historical_rows = []
+    for comp in historical_comps:
+        meta_bits = [comp["team"]]
+        if comp["season"]:
+            meta_bits.append(f"· {comp['season']}")
+        if comp["conf"]:
+            meta_bits.append(f"· {comp['conf']}")
+        historical_rows.append(
+            ui.div(
+                {"class": "sim-row historical"},
+                ui.div(f"{comp['rank']:02d}", class_="sim-rank"),
+                ui.div(
+                    ui.div(comp["name"], class_="nm"),
+                    ui.div(*[ui.span(bit) for bit in meta_bits], class_="meta"),
+                    class_="sim-main",
+                ),
+                ui.div(
+                    f"{comp['similarity']*100:.0f}",
+                    ui.span("%", style="font-size:11px;color:var(--ink-3)"),
+                    ui.span("match", class_="sim-lbl"),
+                    class_="sim-pct",
+                ),
+            )
+        )
+
+    show_historical = similarity_view == "historical" and division_label == "D-I"
+    current_section = ui.div(
+        {"style": "display:none;" if show_historical else "display:block;"},
+        ui.div(
+            ui.input_radio_buttons(
+                "modal_similarity_metric",
+                None,
+                choices={
+                    "mahalanobis": "Mahalanobis",
+                    "euclidean": "Euclidean",
+                },
+                selected=similarity_metric,
+                inline=True,
+            ),
+            class_="sim-metric-control",
+        ),
+        *sim_rows,
+    )
+    historical_empty = ui.div(
+        "Historical comps are not available for this player yet.",
+        class_="qual-note",
+    )
+    historical_section = ui.div(
+        {"style": "display:block;" if show_historical else "display:none;"},
+        *(historical_rows if historical_rows else [historical_empty]),
+    )
+    similarity_sub = (
+        "D-I only · prior-season comp file"
+        if show_historical
+        else SIMILARITY_METRIC_LABELS[similarity_metric]
+    )
+
     body = ui.div(
         {"id": "detail-body"},
         ui.div({"class": "detail-col"},
@@ -1239,22 +1366,24 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                )),
         ui.div({"class": "detail-col"},
                ui.div("Most Similar Players ",
-                      ui.span(SIMILARITY_METRIC_LABELS[similarity_metric], class_="sub"),
+                      ui.span(similarity_sub, class_="sub"),
                       class_="col-title"),
                ui.div(
                    ui.input_radio_buttons(
-                       "modal_similarity_metric",
+                       "modal_similarity_view",
                        None,
-                       choices={
-                           "mahalanobis": "Mahalanobis",
-                           "euclidean": "Euclidean",
-                       },
-                       selected=similarity_metric,
+                       choices=(
+                           SIMILARITY_VIEW_LABELS
+                           if division_label == "D-I"
+                           else {"current": SIMILARITY_VIEW_LABELS["current"]}
+                       ),
+                       selected=similarity_view if division_label == "D-I" else "current",
                        inline=True,
                    ),
                    class_="sim-metric-control",
                ),
-               *sim_rows))
+               current_section,
+               historical_section))
 
     return ui.modal(body,
                     title=ui.HTML(f"Player Profile <b>· {row['name']}</b> "
@@ -3016,6 +3145,7 @@ def server(input, output, session):
     modal_req = reactive.Value(None)
     modal_player = reactive.Value(None)
     modal_similarity_metric = reactive.Value("mahalanobis")
+    modal_similarity_view = reactive.Value("current")
 
     d1_fig = go.FigureWidget()
     d2_fig = go.FigureWidget()
@@ -3299,10 +3429,11 @@ def server(input, output, session):
         else:
             df_, la_, sf_, div_ = d2_df, d2_league_avg, d2_similar_to, "D-II"
         metric_ = modal_similarity_metric.get()
+        view_ = modal_similarity_view.get()
         row = df_[df_["id"] == pid]
         if row.empty: return
         modal_player.set(pid)
-        ui.modal_show(make_detail_modal(pid, df_, la_, sf_, div_, wl, metric_))
+        ui.modal_show(make_detail_modal(pid, df_, la_, sf_, div_, wl, metric_, view_))
 
     @reactive.effect
     @reactive.event(input.modal_similarity_metric)
@@ -3313,6 +3444,20 @@ def server(input, output, session):
         if metric == modal_similarity_metric.get():
             return
         modal_similarity_metric.set(metric)
+        pid = modal_player.get()
+        if pid:
+            import random
+            modal_req.set((pid, random.random()))
+
+    @reactive.effect
+    @reactive.event(input.modal_similarity_view)
+    def _modal_similarity_view_changed():
+        view = input.modal_similarity_view()
+        if view not in SIMILARITY_VIEW_LABELS:
+            view = "current"
+        if view == modal_similarity_view.get():
+            return
+        modal_similarity_view.set(view)
         pid = modal_player.get()
         if pid:
             import random
