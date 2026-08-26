@@ -32,6 +32,10 @@ HISTORICAL_NEIGHBORS_RELATIVE_PATH = (
     Path("historical_comps_output")
     / "d1_historical_neighbors_2026_prior.csv"
 )
+HISTORICAL_CATEGORY_SCORES_RELATIVE_PATH = (
+    Path("historical_comps_output")
+    / "d1_historical_category_scores.csv"
+)
 
 
 def resolve_current_d2_schema_path():
@@ -63,6 +67,17 @@ def resolve_historical_neighbors_path():
     return None
 
 
+def resolve_historical_category_scores_path():
+    direct = HERE.parent / HISTORICAL_CATEGORY_SCORES_RELATIVE_PATH
+    if direct.exists():
+        return direct
+    for base in (HERE, *HERE.parents):
+        candidate = base / HISTORICAL_CATEGORY_SCORES_RELATIVE_PATH
+        if candidate.exists():
+            return candidate
+    return None
+
+
 def load_historical_neighbors():
     path = resolve_historical_neighbors_path()
     if path is None:
@@ -75,6 +90,18 @@ def load_historical_neighbors():
         "match_team",
         "match_conf",
     ]
+    for col in text_cols:
+        if col in df.columns:
+            df[col] = df[col].fillna("").astype(str).str.strip()
+    return df
+
+
+def load_historical_category_scores():
+    path = resolve_historical_category_scores_path()
+    if path is None:
+        return pd.DataFrame()
+    df = pd.read_csv(path)
+    text_cols = ["season_player_id", "player_name", "team", "conf"]
     for col in text_cols:
         if col in df.columns:
             df[col] = df[col].fillna("").astype(str).str.strip()
@@ -93,6 +120,12 @@ D1 = load_d1_data(
 )
 D3 = load_data(str(HERE / "d3_data_cleaned.csv"),          id_prefix="d3p")
 HISTORICAL_NEIGHBORS = load_historical_neighbors()
+HISTORICAL_CATEGORY_SCORES = load_historical_category_scores()
+D1_CURRENT_SEASON = (
+    int(pd.to_numeric(HISTORICAL_CATEGORY_SCORES["year"], errors="coerce").dropna().max())
+    if not HISTORICAL_CATEGORY_SCORES.empty and "year" in HISTORICAL_CATEGORY_SCORES.columns
+    else 2026
+)
 
 d2_df         = D2["df"];  d2_conferences = D2["conferences"]
 d2_league_avg = D2["league_avg"];  d2_similar_to = D2["similar_to"]
@@ -961,6 +994,232 @@ SIMILARITY_VIEW_LABELS = {
     "current": "Current players",
     "historical": "Historical comps",
 }
+SIMILARITY_COMPARE_CATEGORIES = [
+    ("workload", "Workload", [("usg", "USG%"), ("3P_per_100_team_pos", "3PA/100 poss"), ("assisted_fg_pct", "AST'D FG%")]),
+    ("shot_style", "Shot Style", [("three_share", "3PA share"), ("rim_share", "Rim share"), ("three_assisted_pct", "3PT ast%"), ("rim_assisted_pct", "Rim ast%")]),
+    ("spacing", "Spacing", [("3P_pct", "3PT%")]),
+    ("rim_finishing", "Rim / Finishing", [("rim_pct", "Rim%"), ("FTR", "FTR")]),
+    ("rebounding", "Rebounding", [("ORB_pct", "ORB%"), ("DRB_pct", "DRB%")]),
+    ("defense", "Defense", [("Blk_pct", "BLK%"), ("Stl_pct", "STL%"), ("personal_fouls_per_40", "PF/40"), ("stops_per_40", "Stops/40")]),
+    ("ballhandling", "Ballhandling", [("AST_pct", "AST%"), ("AST_TOV", "AST/TO"), ("TOV_pct", "TOV%")]),
+    ("height", "Height", [("height_inches", "Height")]),
+]
+SIMILARITY_COMPARE_PERCENT_KEYS = {
+    "assisted_fg_pct",
+    "three_share",
+    "rim_share",
+    "three_assisted_pct",
+    "rim_assisted_pct",
+    "3P_pct",
+    "rim_pct",
+}
+SIMILARITY_COMPARE_RAW_PERCENT_KEYS = {
+    "usg",
+    "ORB_pct",
+    "DRB_pct",
+    "AST_pct",
+    "TOV_pct",
+    "Blk_pct",
+    "Stl_pct",
+}
+
+
+def _as_float(value):
+    num = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+    return float(num) if pd.notna(num) else np.nan
+
+
+def _format_compare_value(stat_key: str, value: object) -> str:
+    num = _as_float(value)
+    if not np.isfinite(num):
+        return "\u2014"
+    if stat_key == "height_inches":
+        return height_str(int(round(num)))
+    if stat_key in SIMILARITY_COMPARE_PERCENT_KEYS:
+        return f"{num * 100:.1f}%"
+    if stat_key in SIMILARITY_COMPARE_RAW_PERCENT_KEYS:
+        return f"{num:.1f}"
+    if stat_key == "pc":
+        return f"{num:.2f}"
+    if stat_key in {"AST_TOV", "FTR", "3P_per_100_team_pos", "personal_fouls_per_40", "stops_per_40"}:
+        return f"{num:.2f}"
+    return f"{num:.1f}"
+
+
+def _historical_profile_lookup(player_name: str, team: str, year: int | None = None):
+    if HISTORICAL_CATEGORY_SCORES.empty:
+        return None
+    matches = HISTORICAL_CATEGORY_SCORES[
+        HISTORICAL_CATEGORY_SCORES["player_name"].eq(str(player_name).strip())
+        & HISTORICAL_CATEGORY_SCORES["team"].eq(str(team).strip())
+    ].copy()
+    if year is not None and "year" in matches.columns:
+        matches = matches[pd.to_numeric(matches["year"], errors="coerce").eq(int(year))]
+    if matches.empty:
+        return None
+    if "year" in matches.columns:
+        matches = matches.sort_values("year", ascending=False)
+    return matches.iloc[0]
+
+
+def _current_d1_compare_profile(row):
+    hist_row = _historical_profile_lookup(row["name"], row["team"], D1_CURRENT_SEASON)
+    profile = hist_row.to_dict() if hist_row is not None else {}
+    profile.update({
+        "player_name": row["name"],
+        "team": row["team"],
+        "conf": row.get("confName", row.get("conf", "")),
+        "year": D1_CURRENT_SEASON,
+        "player_id": row["id"],
+        "subtitle": f"{row['team']} \u00b7 {row['cls']}",
+        "PC1": _as_float(row.get("PC1")),
+        "PC2": _as_float(row.get("PC2")),
+        "PC3": _as_float(row.get("PC3")),
+        "PC4": _as_float(row.get("PC4")),
+    })
+    return profile
+
+
+def _historical_compare_profile(player_name: str, team: str, season: int | None, conf: str = ""):
+    hist_row = _historical_profile_lookup(player_name, team, season)
+    profile = hist_row.to_dict() if hist_row is not None else {}
+    subtitle_bits = [team]
+    if season:
+        subtitle_bits.append(str(int(season)))
+    if conf:
+        subtitle_bits.append(conf)
+    profile.update({
+        "player_name": player_name,
+        "team": team,
+        "conf": conf,
+        "year": season,
+        "subtitle": " \u00b7 ".join([bit for bit in subtitle_bits if bit]),
+    })
+    return profile
+
+
+def make_similarity_compare_modal(source_profile, target_profile, comparison_origin: str = "historical"):
+    pc_section = ui.div()
+    if comparison_origin == "current":
+        pc_rows = []
+        for key in ("PC1", "PC2", "PC3", "PC4"):
+            if key not in source_profile and key not in target_profile:
+                continue
+            pc_rows.append(
+                ui.div(
+                    {"class": "compare-stat-row"},
+                    ui.div(key, class_="compare-stat-label"),
+                    ui.div(_format_compare_value("pc", source_profile.get(key)), class_="compare-stat-value"),
+                    ui.div(_format_compare_value("pc", target_profile.get(key)), class_="compare-stat-value"),
+                )
+            )
+        if pc_rows:
+            pc_section = ui.div(
+                ui.div("Current Similarity Inputs", class_="compare-section-title"),
+                ui.div(
+                    {"class": "compare-stat-head"},
+                    ui.div("Stat", class_="compare-stat-label"),
+                    ui.div(source_profile["player_name"], class_="compare-stat-player"),
+                    ui.div(target_profile["player_name"], class_="compare-stat-player"),
+                ),
+                *pc_rows,
+                class_="compare-section",
+            )
+
+    category_sections = []
+    for category_key, category_label, stats in SIMILARITY_COMPARE_CATEGORIES:
+        stat_rows = []
+        for stat_key, stat_label in stats:
+            stat_rows.append(
+                ui.div(
+                    {"class": "compare-stat-row"},
+                    ui.div(stat_label, class_="compare-stat-label"),
+                    ui.div(_format_compare_value(stat_key, source_profile.get(stat_key)), class_="compare-stat-value"),
+                    ui.div(_format_compare_value(stat_key, target_profile.get(stat_key)), class_="compare-stat-value"),
+                )
+            )
+        source_grade = _as_float(source_profile.get(f"{category_key}_grade"))
+        target_grade = _as_float(target_profile.get(f"{category_key}_grade"))
+        grade_note = ui.div(
+            ui.span(
+                f"{source_profile['player_name']}: {source_grade:.0f}" if np.isfinite(source_grade) else f"{source_profile['player_name']}: \u2014",
+                class_="compare-grade-pill",
+            ),
+            ui.span(
+                f"{target_profile['player_name']}: {target_grade:.0f}" if np.isfinite(target_grade) else f"{target_profile['player_name']}: \u2014",
+                class_="compare-grade-pill",
+            ),
+            class_="compare-grade-row",
+        )
+        category_sections.append(
+            ui.div(
+                ui.div(category_label, class_="compare-section-title"),
+                grade_note,
+                ui.div(
+                    {"class": "compare-stat-head"},
+                    ui.div("Stat", class_="compare-stat-label"),
+                    ui.div(source_profile["player_name"], class_="compare-stat-player"),
+                    ui.div(target_profile["player_name"], class_="compare-stat-player"),
+                ),
+                *stat_rows,
+                class_="compare-section",
+            )
+        )
+
+    footer_buttons = [
+        ui.tags.button(
+            {
+                "class": "pill-btn active",
+                "onclick": (
+                    f"Shiny.setInputValue('modal_compare_back','{source_profile.get('player_id', '')}',{{priority:'event'}})"
+                ),
+            },
+            "Back to player",
+        )
+    ]
+    if target_profile.get("player_id"):
+        footer_buttons.append(
+            ui.tags.button(
+                {
+                    "class": "pill-btn",
+                    "onclick": (
+                        f"Shiny.setInputValue('modal_compare_open_target','{target_profile['player_id']}',{{priority:'event'}})"
+                    ),
+                },
+                "Open compared player",
+            )
+        )
+
+    body = ui.div(
+        {"class": "compare-modal-shell"},
+        ui.div(
+            {"class": "compare-player-grid"},
+            ui.div(
+                ui.div(source_profile["player_name"], class_="compare-player-name"),
+                ui.div(source_profile.get("subtitle", ""), class_="compare-player-sub"),
+                class_="compare-player-card",
+            ),
+            ui.div(
+                ui.div(target_profile["player_name"], class_="compare-player-name"),
+                ui.div(target_profile.get("subtitle", ""), class_="compare-player-sub"),
+                class_="compare-player-card",
+            ),
+        ),
+        pc_section,
+        *category_sections,
+    )
+
+    subtitle = "Current comps profile view" if comparison_origin == "current" else "Historical comps profile view"
+    return ui.modal(
+        body,
+        title=ui.HTML(
+            f"Similarity Comparison <b>\u00b7 {source_profile['player_name']}</b> "
+            f"<span class=\"sub\" style=\"margin-left:10px;\">{subtitle}</span>"
+        ),
+        easy_close=True,
+        size="xl",
+        footer=ui.div({"class": "compare-footer"}, *footer_buttons),
+    )
 
 
 def historical_comps_for_player(row, n_comp: int = 5):
@@ -978,16 +1237,13 @@ def historical_comps_for_player(row, n_comp: int = 5):
         ref_dist = 1.0
     comps = []
     for _, comp in matches.iterrows():
-        dist = float(comp.get("distance", np.nan))
-        similarity = max(0.0, 1.0 - (dist / ref_dist)) if np.isfinite(dist) else 0.0
         comps.append({
             "rank": int(comp.get("match_rank", len(comps) + 1)),
             "name": comp.get("match_player_name", ""),
             "team": comp.get("match_team", ""),
             "season": int(comp.get("match_season", 0)) if pd.notna(comp.get("match_season", np.nan)) else None,
             "conf": comp.get("match_conf", ""),
-            "similarity": float(similarity),
-            "distance": dist,
+            "distance": float(comp.get("distance", np.nan)),
         })
     return comps
 
@@ -1186,10 +1442,21 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
         sim_arch = sim_row.iloc[0]["primary_archetype"] if not sim_row.empty else None
         sim_badge = archetype_label(sim_arch) if sim_arch else s["pos"]
         sc = ARCHETYPE_COLOR.get(sim_arch, POS_COLOR.get(s["pos"], "#888"))
+        compare_payload = json.dumps({
+            "mode": "current",
+            "source_id": player_id,
+            "target_id": s["id"],
+        })
+        current_click = (
+            f"Shiny.setInputValue('open_similarity_compare',{compare_payload},{{priority:'event'}})"
+            if division_label == "D-I"
+            else f"Shiny.setInputValue('{sim_input}','{s['id']}',{{priority:'event'}})"
+        )
+        action_label = "Compare" if division_label == "D-I" else "Open player"
         sim_rows.append(
             ui.div(
                 {"class": "sim-row",
-                 "onclick": f"Shiny.setInputValue('{sim_input}','{s['id']}',{{priority:'event'}})"},
+                 "onclick": current_click},
                 ui.div(f"{i+1:02d}", class_="sim-rank"),
                 ui.div(
                     ui.div(s["name"], class_="nm"),
@@ -1199,10 +1466,7 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                            ui.span(f"· {s['cls']}", style="color:var(--ink-3)"),
                            class_="meta"),
                     class_="sim-main"),
-                ui.div(f"{s['similarity']*100:.0f}",
-                       ui.span("%", style="font-size:11px;color:var(--ink-3)"),
-                       ui.span("match", class_="sim-lbl"),
-                       class_="sim-pct")))
+                ui.div(action_label, class_="sim-action")))
 
     historical_rows = []
     for comp in historical_comps:
@@ -1211,21 +1475,27 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
             meta_bits.append(f"· {comp['season']}")
         if comp["conf"]:
             meta_bits.append(f"· {comp['conf']}")
+        compare_payload = json.dumps({
+            "mode": "historical",
+            "source_id": player_id,
+            "target_name": comp["name"],
+            "target_team": comp["team"],
+            "target_season": comp["season"],
+            "target_conf": comp["conf"],
+        })
         historical_rows.append(
             ui.div(
-                {"class": "sim-row historical"},
+                {
+                    "class": "sim-row historical",
+                    "onclick": f"Shiny.setInputValue('open_similarity_compare',{compare_payload},{{priority:'event'}})",
+                },
                 ui.div(f"{comp['rank']:02d}", class_="sim-rank"),
                 ui.div(
                     ui.div(comp["name"], class_="nm"),
                     ui.div(*[ui.span(bit) for bit in meta_bits], class_="meta"),
                     class_="sim-main",
                 ),
-                ui.div(
-                    f"{comp['similarity']*100:.0f}",
-                    ui.span("%", style="font-size:11px;color:var(--ink-3)"),
-                    ui.span("match", class_="sim-lbl"),
-                    class_="sim-pct",
-                ),
+                ui.div("Compare", class_="sim-action"),
             )
         )
 
@@ -2426,7 +2696,7 @@ app_ui = ui.page_fluid(
             .player-name-row {
                 display:flex; align-items:flex-start; gap:10px; margin-bottom:3px;
             }
-            #detail-body, .detail-col, .player-name, .sim-main .nm, .sim-pct,
+            #detail-body, .detail-col, .player-name, .sim-main .nm, .sim-action,
             .wl-card-name, .wl-stat .n, .wl-title {
                 color:var(--ink);
             }
@@ -2531,6 +2801,107 @@ app_ui = ui.page_fluid(
                 font-size:11px;
                 line-height:1.4;
                 margin-top:6px;
+            }
+            .sim-action {
+                min-width:84px;
+                text-align:right;
+                align-self:center;
+                font-family:var(--mono);
+                font-size:11px;
+                font-weight:600;
+                letter-spacing:.08em;
+                text-transform:uppercase;
+                color:var(--ink-3);
+            }
+            .compare-modal-shell {
+                display:grid;
+                gap:14px;
+            }
+            .compare-player-grid {
+                display:grid;
+                grid-template-columns:repeat(2, minmax(0, 1fr));
+                gap:12px;
+            }
+            .compare-player-card,
+            .compare-section {
+                border:1px solid var(--rule);
+                background:rgba(255,255,255,0.02);
+                padding:12px 14px;
+            }
+            .compare-player-name {
+                font-family:var(--serif);
+                font-size:26px;
+                font-weight:600;
+                line-height:1.05;
+                color:var(--ink);
+                margin-bottom:6px;
+            }
+            .compare-player-sub {
+                color:var(--ink-3);
+                font-size:12px;
+            }
+            .compare-section-title {
+                font-size:11px;
+                font-weight:700;
+                letter-spacing:.14em;
+                text-transform:uppercase;
+                color:var(--ink-3);
+                margin-bottom:10px;
+            }
+            .compare-grade-row,
+            .compare-stat-head,
+            .compare-stat-row,
+            .compare-footer {
+                display:grid;
+                grid-template-columns:minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+                gap:10px;
+                align-items:center;
+            }
+            .compare-grade-row {
+                grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
+                margin-bottom:10px;
+            }
+            .compare-grade-pill {
+                display:inline-flex;
+                align-items:center;
+                justify-content:center;
+                padding:6px 8px;
+                border:1px solid var(--rule);
+                background:rgba(255,255,255,0.02);
+                font-family:var(--mono);
+                font-size:11px;
+                color:var(--ink-2);
+            }
+            .compare-stat-head {
+                padding-bottom:8px;
+                border-bottom:1px solid var(--rule);
+                margin-bottom:4px;
+                color:var(--ink-3);
+                font-size:10px;
+                font-weight:700;
+                letter-spacing:.12em;
+                text-transform:uppercase;
+            }
+            .compare-stat-row {
+                padding:8px 0;
+                border-bottom:1px solid rgba(255,255,255,0.04);
+            }
+            .compare-stat-row:last-child {
+                border-bottom:none;
+                padding-bottom:0;
+            }
+            .compare-stat-label {
+                color:var(--ink-2);
+            }
+            .compare-stat-player,
+            .compare-stat-value {
+                text-align:right;
+                color:var(--ink);
+                font-family:var(--mono);
+            }
+            .compare-footer {
+                grid-template-columns:repeat(2, max-content);
+                justify-content:flex-end;
             }
 
             /* watchlist tab layout */
@@ -3146,6 +3517,7 @@ def server(input, output, session):
     modal_player = reactive.Value(None)
     modal_similarity_metric = reactive.Value("mahalanobis")
     modal_similarity_view = reactive.Value("current")
+    compare_req = reactive.Value(None)
 
     d1_fig = go.FigureWidget()
     d2_fig = go.FigureWidget()
@@ -3462,6 +3834,54 @@ def server(input, output, session):
         if pid:
             import random
             modal_req.set((pid, random.random()))
+
+    @reactive.effect
+    @reactive.event(input.open_similarity_compare)
+    def _open_similarity_compare():
+        payload = input.open_similarity_compare()
+        if not payload:
+            return
+        source_id = str(payload.get("source_id", "")).strip()
+        if not source_id:
+            return
+        source_rows = d1_df[d1_df["id"] == source_id]
+        if source_rows.empty:
+            return
+        source_profile = _current_d1_compare_profile(source_rows.iloc[0])
+        compare_mode = str(payload.get("mode", "historical")).strip() or "historical"
+        if compare_mode == "current":
+            target_id = str(payload.get("target_id", "")).strip()
+            target_rows = d1_df[d1_df["id"] == target_id]
+            if target_rows.empty:
+                return
+            target_profile = _current_d1_compare_profile(target_rows.iloc[0])
+        else:
+            target_profile = _historical_compare_profile(
+                str(payload.get("target_name", "")).strip(),
+                str(payload.get("target_team", "")).strip(),
+                payload.get("target_season"),
+                str(payload.get("target_conf", "")).strip(),
+            )
+        compare_req.set(payload)
+        ui.modal_show(make_similarity_compare_modal(source_profile, target_profile, compare_mode))
+
+    @reactive.effect
+    @reactive.event(input.modal_compare_back)
+    def _modal_compare_back():
+        pid = str(input.modal_compare_back() or "").strip()
+        if not pid:
+            return
+        import random
+        modal_req.set((pid, random.random()))
+
+    @reactive.effect
+    @reactive.event(input.modal_compare_open_target)
+    def _modal_compare_open_target():
+        pid = str(input.modal_compare_open_target() or "").strip()
+        if not pid:
+            return
+        import random
+        modal_req.set((pid, random.random()))
 
     # ── Open modal from watchlist card ────────────────────────────────────
     @reactive.effect
