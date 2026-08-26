@@ -1099,6 +1099,8 @@ def _historical_compare_profile(player_name: str, team: str, season: int | None,
 
 
 def make_similarity_compare_modal(source_profile, target_profile, comparison_origin: str = "historical"):
+    source_height = _format_compare_value("height_inches", source_profile.get("height_inches"))
+    target_height = _format_compare_value("height_inches", target_profile.get("height_inches"))
     pc_section = ui.div()
     if comparison_origin == "current":
         pc_rows = []
@@ -1191,25 +1193,27 @@ def make_similarity_compare_modal(source_profile, target_profile, comparison_ori
         )
 
     body = ui.div(
-        {
-            "class": "compare-modal-shell",
-            "style": "max-height:72vh;overflow-y:auto;padding-right:6px;",
-        },
+        {"id": "compare-detail-body"},
         ui.div(
             {"class": "compare-player-grid"},
             ui.div(
                 ui.div(source_profile["player_name"], class_="compare-player-name"),
                 ui.div(source_profile.get("subtitle", ""), class_="compare-player-sub"),
+                ui.div(f"Height: {source_height}", class_="compare-player-sub"),
                 class_="compare-player-card",
             ),
             ui.div(
                 ui.div(target_profile["player_name"], class_="compare-player-name"),
                 ui.div(target_profile.get("subtitle", ""), class_="compare-player-sub"),
+                ui.div(f"Height: {target_height}", class_="compare-player-sub"),
                 class_="compare-player-card",
             ),
         ),
-        pc_section,
-        *category_sections,
+        ui.div(
+            {"class": "compare-modal-shell"},
+            pc_section,
+            *category_sections,
+        ),
     )
 
     subtitle = "Current comps profile view" if comparison_origin == "current" else "Historical comps profile view"
@@ -2818,14 +2822,31 @@ app_ui = ui.page_fluid(
                 text-transform:uppercase;
                 color:var(--ink-3);
             }
+            #compare-detail-body {
+                display:flex;
+                flex-direction:column;
+                height:min(78vh, calc(100vh - 148px));
+                max-height:calc(100vh - 148px);
+                min-height:0;
+            }
             .compare-modal-shell {
                 display:grid;
                 gap:14px;
+                flex:1 1 auto;
+                min-height:0;
+                height:100%;
+                max-height:100%;
+                overflow-y:auto !important;
+                overscroll-behavior:contain;
+                -webkit-overflow-scrolling:touch;
+                padding-right:6px;
             }
             .compare-player-grid {
                 display:grid;
                 grid-template-columns:repeat(2, minmax(0, 1fr));
                 gap:12px;
+                flex:0 0 auto;
+                margin-bottom:14px;
             }
             .compare-player-card,
             .compare-section {
