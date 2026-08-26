@@ -1191,7 +1191,10 @@ def make_similarity_compare_modal(source_profile, target_profile, comparison_ori
         )
 
     body = ui.div(
-        {"class": "compare-modal-shell"},
+        {
+            "class": "compare-modal-shell",
+            "style": "max-height:72vh;overflow-y:auto;padding-right:6px;",
+        },
         ui.div(
             {"class": "compare-player-grid"},
             ui.div(
@@ -1452,7 +1455,6 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
             if division_label == "D-I"
             else f"Shiny.setInputValue('{sim_input}','{s['id']}',{{priority:'event'}})"
         )
-        action_label = "Compare" if division_label == "D-I" else "Open player"
         sim_rows.append(
             ui.div(
                 {"class": "sim-row",
@@ -1466,7 +1468,10 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                            ui.span(f"· {s['cls']}", style="color:var(--ink-3)"),
                            class_="meta"),
                     class_="sim-main"),
-                ui.div(action_label, class_="sim-action")))
+                ui.div(f"{s['similarity']*100:.0f}",
+                       ui.span("%", style="font-size:11px;color:var(--ink-3)"),
+                       ui.span("match", class_="sim-lbl"),
+                       class_="sim-pct")))
 
     historical_rows = []
     for comp in historical_comps:
