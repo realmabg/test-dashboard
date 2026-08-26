@@ -636,6 +636,12 @@ def load_d1_data(
     df["ast_per_40"] = (df["apg"] * pace_to_40).fillna(0)
     df["stl_per_40"] = (df["spg"] * pace_to_40).fillna(0)
     df["blk_per_40"] = (df["bpg"] * pace_to_40).fillna(0)
+    total_minutes = df["gp"] * df["mpg"]
+    df["stops_per_40"] = np.where(
+        total_minutes > 0,
+        n("stops") * 40.0 / total_minutes.replace(0, np.nan),
+        np.nan,
+    )
 
     # Assist-to-turnover (raw tov col is TOV_per_24; use AST_TOV ratio directly)
     df["ast_tov"] = n("AST_TOV")

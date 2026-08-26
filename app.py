@@ -28,14 +28,12 @@ D2_SCHEMA_RELATIVE_PATH = (
 LEGACY_D2_PATH = HERE / "d2_data_cleaned.csv"
 CORE_V3_MEMBERSHIPS_PATH = HERE / "core_v3_memberships.csv"
 CORE_V3_UNSTABLE_PATH = HERE / "core_v3_under150_unstable_scores_2026.csv"
-HISTORICAL_NEIGHBORS_RELATIVE_PATH = (
-    Path("historical_comps_output")
-    / "d1_historical_neighbors_2026_prior.csv"
-)
-HISTORICAL_CATEGORY_SCORES_RELATIVE_PATH = (
-    Path("historical_comps_output")
-    / "d1_historical_category_scores.csv"
-)
+HISTORICAL_NEIGHBORS_RELATIVE_PATHS = {
+    "all": Path("historical_comps_output") / "d1_historical_neighbors_2026_prior_all.csv",
+    "big_west_transfers": (
+        Path("historical_comps_output") / "d1_historical_neighbors_2026_prior_big_west_transfers.csv"
+    ),
+}
 
 
 def resolve_current_d2_schema_path():
@@ -56,30 +54,24 @@ def resolve_core_v3_unstable_path():
     return CORE_V3_UNSTABLE_PATH if CORE_V3_UNSTABLE_PATH.exists() else None
 
 
-def resolve_historical_neighbors_path():
-    direct = HERE.parent / HISTORICAL_NEIGHBORS_RELATIVE_PATH
+def resolve_historical_neighbors_path(pool_key: str = "all"):
+    relative_path = HISTORICAL_NEIGHBORS_RELATIVE_PATHS.get(
+        pool_key, HISTORICAL_NEIGHBORS_RELATIVE_PATHS["all"]
+    )
+    direct = HERE.parent / relative_path
     if direct.exists():
         return direct
     for base in (HERE, *HERE.parents):
-        candidate = base / HISTORICAL_NEIGHBORS_RELATIVE_PATH
+        candidate = base / relative_path
         if candidate.exists():
             return candidate
     return None
 
 
-def resolve_historical_category_scores_path():
-    direct = HERE.parent / HISTORICAL_CATEGORY_SCORES_RELATIVE_PATH
-    if direct.exists():
-        return direct
-    for base in (HERE, *HERE.parents):
-        candidate = base / HISTORICAL_CATEGORY_SCORES_RELATIVE_PATH
-        if candidate.exists():
-            return candidate
-    return None
 
 
-def load_historical_neighbors():
-    path = resolve_historical_neighbors_path()
+def load_historical_neighbors(pool_key: str = "all"):
+    path = resolve_historical_neighbors_path(pool_key)
     if path is None:
         return pd.DataFrame()
     df = pd.read_csv(path)
@@ -96,16 +88,6 @@ def load_historical_neighbors():
     return df
 
 
-def load_historical_category_scores():
-    path = resolve_historical_category_scores_path()
-    if path is None:
-        return pd.DataFrame()
-    df = pd.read_csv(path)
-    text_cols = ["season_player_id", "player_name", "team", "conf"]
-    for col in text_cols:
-        if col in df.columns:
-            df[col] = df[col].fillna("").astype(str).str.strip()
-    return df
 
 D2 = load_data(
     str(resolve_current_d2_schema_path()),
@@ -119,13 +101,11 @@ D1 = load_d1_data(
     recruiting_path=str(HERE / "recruiting_rankings_cache.csv"),
 )
 D3 = load_data(str(HERE / "d3_data_cleaned.csv"),          id_prefix="d3p")
-HISTORICAL_NEIGHBORS = load_historical_neighbors()
-HISTORICAL_CATEGORY_SCORES = load_historical_category_scores()
-D1_CURRENT_SEASON = (
-    int(pd.to_numeric(HISTORICAL_CATEGORY_SCORES["year"], errors="coerce").dropna().max())
-    if not HISTORICAL_CATEGORY_SCORES.empty and "year" in HISTORICAL_CATEGORY_SCORES.columns
-    else 2026
-)
+HISTORICAL_NEIGHBORS = {
+    "all": load_historical_neighbors("all"),
+    "big_west_transfers": load_historical_neighbors("big_west_transfers"),
+}
+D1_CURRENT_SEASON = 2026
 
 d2_df         = D2["df"];  d2_conferences = D2["conferences"]
 d2_league_avg = D2["league_avg"];  d2_similar_to = D2["similar_to"]
@@ -456,10 +436,16 @@ def make_shot_profile_pie_html(row, player_id):
     if total_attempts <= 0:
         return ui.div("No FGA.", class_="qual-note")
 
-    def shot_slice_color(fg_pct):
-        if fg_pct >= 0.50:
+    def shot_slice_color(label, fg_pct):
+        thresholds = {
+            "RIM": (0.60, 0.50),
+            "3PT": (0.37, 0.32),
+            "MID": (0.42, 0.36),
+        }
+        strong_cutoff, medium_cutoff = thresholds.get(label, (0.50, 0.35))
+        if fg_pct >= strong_cutoff:
             return "#2f855a"
-        if fg_pct >= 0.35:
+        if fg_pct >= medium_cutoff:
             return "#d5a437"
         return "#b95c5c"
 
@@ -533,7 +519,7 @@ def make_shot_profile_pie_html(row, player_id):
         )
         hover_attr = html.escape(hover, quote=True)
         svg_parts.append(
-            f'<circle cx="{cx}" cy="{cy}" r="{radius}" fill="{shot_slice_color(fg_pct)}" '
+            f'<circle cx="{cx}" cy="{cy}" r="{radius}" fill="{shot_slice_color(label, fg_pct)}" '
             'stroke="#f4ead4" stroke-width="2" '
             f'data-tip="{hover_attr}" '
             'onmousemove="const wrap=this.closest(\'.shot-pie-wrap\');'
@@ -569,7 +555,7 @@ def make_shot_profile_pie_html(row, player_id):
         )
         hover_attr = html.escape(hover, quote=True)
         svg_parts.append(
-            f'<path d="{path}" fill="{shot_slice_color(fg_pct)}" stroke="#f4ead4" stroke-width="2" '
+            f'<path d="{path}" fill="{shot_slice_color(label, fg_pct)}" stroke="#f4ead4" stroke-width="2" '
             f'data-tip="{hover_attr}" '
             'onmousemove="const wrap=this.closest(\'.shot-pie-wrap\');'
             'const readout=wrap&&wrap.querySelector(\'.shot-pie-readout\');'
@@ -994,6 +980,10 @@ SIMILARITY_VIEW_LABELS = {
     "current": "Current players",
     "historical": "Historical comps",
 }
+SIMILARITY_HISTORICAL_POOL_LABELS = {
+    "all": "All",
+    "big_west_transfers": "Transferred to Big West",
+}
 SIMILARITY_COMPARE_CATEGORIES = [
     ("workload", "Workload", [("usg", "USG%"), ("3P_per_100_team_pos", "3PA/100 poss"), ("assisted_fg_pct", "AST'D FG%")]),
     ("shot_style", "Shot Style", [("three_share", "3PA share"), ("rim_share", "Rim share"), ("three_assisted_pct", "3PT ast%"), ("rim_assisted_pct", "Rim ast%")]),
@@ -1045,57 +1035,69 @@ def _format_compare_value(stat_key: str, value: object) -> str:
         return f"{num:.2f}"
     return f"{num:.1f}"
 
+CURRENT_TO_COMPARE_KEY = {
+    "usg": "usg",
+    "3P_per_100_team_pos": "3P_per_100_team_pos",
+    "assisted_fg_pct": "assisted_fg_pct",
+    "three_share": "three_share",
+    "rim_share": "rim_share",
+    "three_assisted_pct": "three_assisted_pct",
+    "rim_assisted_pct": "rim_assisted_pct",
+    "3P_pct": "tp",
+    "rim_pct": "rim_fg_pct",
+    "FTR": "ftr",
+    "ORB_pct": "orb_pct",
+    "DRB_pct": "drb_pct",
+    "Blk_pct": "blk_pct",
+    "Stl_pct": "stl_pct",
+    "personal_fouls_per_40": "pf_per_40",
+    "stops_per_40": "stops_per_40",
+    "AST_pct": "ast_pct",
+    "AST_TOV": "ast_tov",
+    "TOV_pct": "tov_pct",
+}
 
-def _historical_profile_lookup(player_name: str, team: str, year: int | None = None):
-    if HISTORICAL_CATEGORY_SCORES.empty:
-        return None
-    matches = HISTORICAL_CATEGORY_SCORES[
-        HISTORICAL_CATEGORY_SCORES["player_name"].eq(str(player_name).strip())
-        & HISTORICAL_CATEGORY_SCORES["team"].eq(str(team).strip())
-    ].copy()
-    if year is not None and "year" in matches.columns:
-        matches = matches[pd.to_numeric(matches["year"], errors="coerce").eq(int(year))]
-    if matches.empty:
-        return None
-    if "year" in matches.columns:
-        matches = matches.sort_values("year", ascending=False)
-    return matches.iloc[0]
 
-
-def _current_d1_compare_profile(row):
-    hist_row = _historical_profile_lookup(row["name"], row["team"], D1_CURRENT_SEASON)
-    profile = hist_row.to_dict() if hist_row is not None else {}
-    profile.update({
+def _current_compare_profile_from_row(row):
+    profile = {
         "player_name": row["name"],
         "team": row["team"],
         "conf": row.get("confName", row.get("conf", "")),
         "year": D1_CURRENT_SEASON,
         "player_id": row["id"],
         "subtitle": f"{row['team']} \u00b7 {row['cls']}",
+        "height_inches": _as_float(row.get("heightIn")),
         "PC1": _as_float(row.get("PC1")),
         "PC2": _as_float(row.get("PC2")),
         "PC3": _as_float(row.get("PC3")),
         "PC4": _as_float(row.get("PC4")),
-    })
+    }
+    for compare_key, row_key in CURRENT_TO_COMPARE_KEY.items():
+        profile[compare_key] = _as_float(row.get(row_key))
     return profile
 
 
-def _historical_compare_profile(player_name: str, team: str, season: int | None, conf: str = ""):
-    hist_row = _historical_profile_lookup(player_name, team, season)
-    profile = hist_row.to_dict() if hist_row is not None else {}
-    subtitle_bits = [team]
-    if season:
-        subtitle_bits.append(str(int(season)))
-    if conf:
-        subtitle_bits.append(conf)
-    profile.update({
-        "player_name": player_name,
-        "team": team,
-        "conf": conf,
-        "year": season,
-        "subtitle": " \u00b7 ".join([bit for bit in subtitle_bits if bit]),
-    })
+def _profile_from_neighbor_payload(payload, prefix: str, player_id: str = "", subtitle: str = "", year: int | None = None):
+    profile = {
+        "player_name": str(payload.get(f"{prefix}_name", "")).strip(),
+        "team": str(payload.get(f"{prefix}_team", "")).strip(),
+        "conf": str(payload.get(f"{prefix}_conf", "")).strip(),
+        "year": year,
+        "player_id": player_id,
+        "subtitle": subtitle,
+    }
+    for category_key, _, stats in SIMILARITY_COMPARE_CATEGORIES:
+        grade_key = f"{prefix}_{category_key}_grade"
+        if grade_key in payload:
+            profile[f"{category_key}_grade"] = _as_float(payload.get(grade_key))
+        for stat_key, _label in stats:
+            key = f"{prefix}_{stat_key}"
+            profile[stat_key] = _as_float(payload.get(key))
     return profile
+
+
+def _current_d1_compare_profile(row):
+    return _current_compare_profile_from_row(row)
 
 
 def make_similarity_compare_modal(source_profile, target_profile, comparison_origin: str = "historical"):
@@ -1229,12 +1231,13 @@ def make_similarity_compare_modal(source_profile, target_profile, comparison_ori
     )
 
 
-def historical_comps_for_player(row, n_comp: int = 5):
-    if HISTORICAL_NEIGHBORS.empty:
+def historical_comps_for_player(row, n_comp: int = 5, pool_key: str = "all"):
+    neighbors_df = HISTORICAL_NEIGHBORS.get(pool_key, HISTORICAL_NEIGHBORS["all"])
+    if neighbors_df.empty:
         return []
-    matches = HISTORICAL_NEIGHBORS[
-        HISTORICAL_NEIGHBORS["target_player_name"].eq(str(row["name"]).strip())
-        & HISTORICAL_NEIGHBORS["target_team"].eq(str(row["team"]).strip())
+    matches = neighbors_df[
+        neighbors_df["target_player_name"].eq(str(row["name"]).strip())
+        & neighbors_df["target_team"].eq(str(row["team"]).strip())
     ].copy()
     if matches.empty:
         return []
@@ -1244,26 +1247,47 @@ def historical_comps_for_player(row, n_comp: int = 5):
         ref_dist = 1.0
     comps = []
     for _, comp in matches.iterrows():
-        comps.append({
+        comp_payload = {
             "rank": int(comp.get("match_rank", len(comps) + 1)),
             "name": comp.get("match_player_name", ""),
             "team": comp.get("match_team", ""),
             "season": int(comp.get("match_season", 0)) if pd.notna(comp.get("match_season", np.nan)) else None,
             "conf": comp.get("match_conf", ""),
             "distance": float(comp.get("distance", np.nan)),
-        })
+            "target_name": comp.get("target_player_name", ""),
+            "target_team": comp.get("target_team", ""),
+            "target_conf": comp.get("target_conf", ""),
+        }
+        for category_key, _category_label, stats in SIMILARITY_COMPARE_CATEGORIES:
+            for stat_key, _stat_label in stats:
+                comp_payload[f"target_{stat_key}"] = comp.get(f"target_{stat_key}", np.nan)
+                comp_payload[f"match_{stat_key}"] = comp.get(f"match_{stat_key}", np.nan)
+            comp_payload[f"target_{category_key}_grade"] = comp.get(
+                f"target_{category_key}_grade", np.nan
+            )
+            comp_payload[f"match_{category_key}_grade"] = comp.get(
+                f"match_{category_key}_grade", np.nan
+            )
+        comps.append(comp_payload)
     return comps
 
 
 def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, watchlist,
-                      similarity_metric="mahalanobis", similarity_view="current"):
+                      similarity_metric="mahalanobis", similarity_view="current",
+                      historical_pool="all"):
     row  = df[df["id"] == player_id].iloc[0]
     if similarity_metric not in SIMILARITY_METRIC_LABELS:
         similarity_metric = "mahalanobis"
     if similarity_view not in SIMILARITY_VIEW_LABELS:
         similarity_view = "current"
+    if historical_pool not in SIMILARITY_HISTORICAL_POOL_LABELS:
+        historical_pool = "all"
     sims = similar_to_fn(player_id, n_sim=5, metric=similarity_metric)
-    historical_comps = historical_comps_for_player(row) if division_label == "D-I" else []
+    historical_comps = (
+        historical_comps_for_player(row, pool_key=historical_pool)
+        if division_label == "D-I"
+        else []
+    )
     pc   = ARCHETYPE_COLOR.get(row["primary_archetype"], POS_COLOR.get(row["pos"], "#888"))
 
     if division_label == "D-I":
@@ -1491,6 +1515,18 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
             "target_team": comp["team"],
             "target_season": comp["season"],
             "target_conf": comp["conf"],
+            "target_name_current": comp.get("target_name", ""),
+            "target_team_current": comp.get("target_team", ""),
+            "target_conf_current": comp.get("target_conf", ""),
+            **{
+                key: comp.get(key)
+                for category_key, _category_label, stats in SIMILARITY_COMPARE_CATEGORIES
+                for key in (
+                    [f"target_{category_key}_grade", f"match_{category_key}_grade"]
+                    + [f"target_{stat_key}" for stat_key, _ in stats]
+                    + [f"match_{stat_key}" for stat_key, _ in stats]
+                )
+            },
         })
         historical_rows.append(
             ui.div(
@@ -1535,7 +1571,11 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
         *(historical_rows if historical_rows else [historical_empty]),
     )
     similarity_sub = (
-        "D-I only · prior-season comp file"
+        (
+            "D-I only · players who later transferred to the Big West"
+            if historical_pool == "big_west_transfers"
+            else "D-I only · full historical pool"
+        )
         if show_historical
         else SIMILARITY_METRIC_LABELS[similarity_metric]
     )
@@ -1560,7 +1600,7 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                       bio_item("Division", division_label),
                       bio_item("Archetype", archetype_label(row["primary_archetype"])),
                       bio_item(
-                          "Archetype v2",
+                          "UCSD Position",
                           str(row.get("archetype_v2_primary_label", "Unavailable"))
                           if pd.notna(row.get("archetype_v2_primary_label", pd.NA))
                           else "Unavailable",
@@ -1578,7 +1618,7 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                    class_="arch-score-panel",
                ),
                ui.div(
-                   ui.div("Archetype v2", class_="col-title"),
+                   ui.div("UCSD Position", class_="col-title"),
                    ui.div(
                        ui.div(ui.tags.b("Primary: "), f"{row['archetype_v2_primary_label']} ({format_weight_pct(row['archetype_v2_primary_weight'])})", class_="qual-note"),
                        ui.div(ui.tags.b("Secondary: "), f"{row['archetype_v2_secondary_label']} ({format_weight_pct(row['archetype_v2_secondary_weight'])})", class_="qual-note"),
@@ -1657,6 +1697,19 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                            else {"current": SIMILARITY_VIEW_LABELS["current"]}
                        ),
                        selected=similarity_view if division_label == "D-I" else "current",
+                       inline=True,
+                   ),
+                   class_="sim-metric-control",
+               ),
+               ui.div(
+                   {
+                       "style": "display:block;" if show_historical and division_label == "D-I" else "display:none;"
+                   },
+                   ui.input_radio_buttons(
+                       "modal_similarity_pool",
+                       None,
+                       choices=SIMILARITY_HISTORICAL_POOL_LABELS,
+                       selected=historical_pool,
                        inline=True,
                    ),
                    class_="sim-metric-control",
@@ -2235,7 +2288,7 @@ def make_sidebar(prefix, df, conferences):
     archetype_v2_filter = (
         ui.div(
             ui.div(
-                ui.span("Archetype v2"),
+                ui.span("UCSD Position"),
                 ui.tags.button(
                     "clear",
                     class_="clear-btn",
@@ -2254,7 +2307,7 @@ def make_sidebar(prefix, df, conferences):
     )
     archetype_v2_score_filter = (
         ui.div(
-            ui.div("Minimum archetype v2 weight", class_="sb-section-head"),
+            ui.div("Minimum UCSD position weight", class_="sb-section-head"),
             ui.input_slider(
                 f"{prefix}_score_v2_min",
                 None,
@@ -2314,7 +2367,7 @@ def make_sidebar(prefix, df, conferences):
         ui.div(ui.div("Search by name", class_="sb-section-head"),
                ui.input_text(f"{prefix}_q", None, placeholder="e.g. Marcus Jackson"),
                class_="sb-section"),
-        ui.div(ui.div("Filter Mode", class_="sb-section-head"),
+        ui.div(ui.div("UCSD Position", class_="sb-section-head"),
                ui.input_select(
                    f"{prefix}_qualification_filter",
                    None,
@@ -2324,7 +2377,7 @@ def make_sidebar(prefix, df, conferences):
                class_="sb-section"),
         transfer_tag_filter,
         recruiting_tag_filter,
-        ui.div(ui.div(ui.span("Most Similar Archetype"),
+        ui.div(ui.div(ui.span("Most Similar UCSD Position"),
                       ui.tags.button("clear", class_="clear-btn",
                           onclick=f"Shiny.setInputValue('{prefix}_clear_arch',Math.random())"),
                       class_="sb-section-head"),
@@ -3467,7 +3520,7 @@ app_ui = ui.page_fluid(
                    id="btn-wl", class_="tab-btn",
                    onclick="switchTab('wl')"),
                ui.div({"class": "tab-sep"}),
-               ui.tags.button("UCSD 2026-27", id="btn-ucsd", class_="tab-btn",
+               ui.tags.button("UCSD 2026-27 (beta)", id="btn-ucsd", class_="tab-btn",
                               onclick="switchTab('ucsd')")),
 
         ui.div({"id": "tab-content"},
@@ -3543,6 +3596,7 @@ def server(input, output, session):
     modal_player = reactive.Value(None)
     modal_similarity_metric = reactive.Value("mahalanobis")
     modal_similarity_view = reactive.Value("current")
+    modal_similarity_pool = reactive.Value("all")
     compare_req = reactive.Value(None)
 
     d1_fig = go.FigureWidget()
@@ -3828,10 +3882,11 @@ def server(input, output, session):
             df_, la_, sf_, div_ = d2_df, d2_league_avg, d2_similar_to, "D-II"
         metric_ = modal_similarity_metric.get()
         view_ = modal_similarity_view.get()
+        pool_ = modal_similarity_pool.get()
         row = df_[df_["id"] == pid]
         if row.empty: return
         modal_player.set(pid)
-        ui.modal_show(make_detail_modal(pid, df_, la_, sf_, div_, wl, metric_, view_))
+        ui.modal_show(make_detail_modal(pid, df_, la_, sf_, div_, wl, metric_, view_, pool_))
 
     @reactive.effect
     @reactive.event(input.modal_similarity_metric)
@@ -3862,6 +3917,20 @@ def server(input, output, session):
             modal_req.set((pid, random.random()))
 
     @reactive.effect
+    @reactive.event(input.modal_similarity_pool)
+    def _modal_similarity_pool_changed():
+        pool = input.modal_similarity_pool()
+        if pool not in SIMILARITY_HISTORICAL_POOL_LABELS:
+            pool = "all"
+        if pool == modal_similarity_pool.get():
+            return
+        modal_similarity_pool.set(pool)
+        pid = modal_player.get()
+        if pid:
+            import random
+            modal_req.set((pid, random.random()))
+
+    @reactive.effect
     @reactive.event(input.open_similarity_compare)
     def _open_similarity_compare():
         payload = input.open_similarity_compare()
@@ -3873,7 +3942,8 @@ def server(input, output, session):
         source_rows = d1_df[d1_df["id"] == source_id]
         if source_rows.empty:
             return
-        source_profile = _current_d1_compare_profile(source_rows.iloc[0])
+        source_row = source_rows.iloc[0]
+        source_profile = _current_d1_compare_profile(source_row)
         compare_mode = str(payload.get("mode", "historical")).strip() or "historical"
         if compare_mode == "current":
             target_id = str(payload.get("target_id", "")).strip()
@@ -3882,12 +3952,44 @@ def server(input, output, session):
                 return
             target_profile = _current_d1_compare_profile(target_rows.iloc[0])
         else:
-            target_profile = _historical_compare_profile(
-                str(payload.get("target_name", "")).strip(),
-                str(payload.get("target_team", "")).strip(),
-                payload.get("target_season"),
-                str(payload.get("target_conf", "")).strip(),
+            source_profile = _profile_from_neighbor_payload(
+                payload,
+                "target",
+                player_id=source_id,
+                subtitle=f"{source_row['team']} \u00b7 {source_row['cls']}",
+                year=D1_CURRENT_SEASON,
             )
+            source_profile.update({
+                "player_name": source_row["name"],
+                "team": source_row["team"],
+                "conf": source_row.get("confName", source_row.get("conf", "")),
+                "height_inches": _as_float(source_row.get("heightIn")),
+                "PC1": _as_float(source_row.get("PC1")),
+                "PC2": _as_float(source_row.get("PC2")),
+                "PC3": _as_float(source_row.get("PC3")),
+                "PC4": _as_float(source_row.get("PC4")),
+            })
+            target_profile = _profile_from_neighbor_payload(
+                payload,
+                "match",
+                subtitle=" \u00b7 ".join(
+                    [
+                        str(payload.get("target_team", "") or payload.get("match_team", "")).strip(),
+                    ]
+                ),
+            )
+            subtitle_bits = [
+                str(payload.get("target_team", "") or payload.get("match_team", "")).strip(),
+                str(payload.get("target_season", "") or "").strip(),
+                str(payload.get("target_conf", "") or "").strip(),
+            ]
+            target_profile.update({
+                "player_name": str(payload.get("target_name", "")).strip(),
+                "team": str(payload.get("target_team", "")).strip(),
+                "conf": str(payload.get("target_conf", "")).strip(),
+                "year": payload.get("target_season"),
+                "subtitle": " \u00b7 ".join([bit for bit in subtitle_bits if bit]),
+            })
         compare_req.set(payload)
         ui.modal_show(make_similarity_compare_modal(source_profile, target_profile, compare_mode))
 
