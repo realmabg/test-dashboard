@@ -30,8 +30,8 @@ CORE_V3_MEMBERSHIPS_PATH = HERE / "core_v3_memberships.csv"
 CORE_V3_UNSTABLE_PATH = HERE / "core_v3_under150_unstable_scores_2026.csv"
 HISTORICAL_NEIGHBORS_RELATIVE_PATHS = {
     "all": Path("historical_comps_output") / "d1_historical_neighbors_2026_prior_all.csv",
-    "big_west_transfers": (
-        Path("historical_comps_output") / "d1_historical_neighbors_2026_prior_big_west_transfers.csv"
+    "big_west_next_year": (
+        Path("historical_comps_output") / "d1_historical_neighbors_2026_prior_big_west_next_year.csv"
     ),
 }
 
@@ -103,7 +103,7 @@ D1 = load_d1_data(
 D3 = load_data(str(HERE / "d3_data_cleaned.csv"),          id_prefix="d3p")
 HISTORICAL_NEIGHBORS = {
     "all": load_historical_neighbors("all"),
-    "big_west_transfers": load_historical_neighbors("big_west_transfers"),
+    "big_west_next_year": load_historical_neighbors("big_west_next_year"),
 }
 D1_CURRENT_SEASON = 2026
 
@@ -982,7 +982,7 @@ SIMILARITY_VIEW_LABELS = {
 }
 SIMILARITY_HISTORICAL_POOL_LABELS = {
     "all": "All",
-    "big_west_transfers": "Transferred to Big West",
+    "big_west_next_year": "Played in Big West next year",
 }
 SIMILARITY_COMPARE_CATEGORIES = [
     ("workload", "Workload", [("usg", "USG%"), ("3P_per_100_team_pos", "3PA/100 poss"), ("assisted_fg_pct", "AST'D FG%")]),
@@ -1100,31 +1100,43 @@ def _current_d1_compare_profile(row):
     return _current_compare_profile_from_row(row)
 
 
-def make_similarity_compare_modal(source_profile, target_profile, comparison_origin: str = "historical"):
-    source_height = _format_compare_value("height_inches", source_profile.get("height_inches"))
-    target_height = _format_compare_value("height_inches", target_profile.get("height_inches"))
+def make_similarity_compare_modal(
+    source_profile,
+    target_profile,
+    comparison_origin: str = "historical",
+    future_profile=None,
+):
+    profiles = [source_profile, target_profile]
+    if future_profile and str(future_profile.get("player_name", "")).strip():
+        profiles.append(future_profile)
+
+    compare_grid_cols = f"minmax(0, 1.2fr) {' '.join(['minmax(0, 1fr)' for _ in profiles])}"
+    grade_cols = " ".join(["minmax(0, 1fr)" for _ in profiles])
+
     pc_section = ui.div()
     if comparison_origin == "current":
         pc_rows = []
         for key in ("PC1", "PC2", "PC3", "PC4"):
-            if key not in source_profile and key not in target_profile:
+            if all(key not in profile for profile in profiles):
                 continue
+            row_children = [ui.div(key, class_="compare-stat-label")]
+            for profile in profiles:
+                row_children.append(
+                    ui.div(_format_compare_value("pc", profile.get(key)), class_="compare-stat-value")
+                )
             pc_rows.append(
                 ui.div(
-                    {"class": "compare-stat-row"},
-                    ui.div(key, class_="compare-stat-label"),
-                    ui.div(_format_compare_value("pc", source_profile.get(key)), class_="compare-stat-value"),
-                    ui.div(_format_compare_value("pc", target_profile.get(key)), class_="compare-stat-value"),
+                    {"class": "compare-stat-row", "style": f"grid-template-columns:{compare_grid_cols};"},
+                    *row_children,
                 )
             )
         if pc_rows:
             pc_section = ui.div(
                 ui.div("Current Similarity Inputs", class_="compare-section-title"),
                 ui.div(
-                    {"class": "compare-stat-head"},
+                    {"class": "compare-stat-head", "style": f"grid-template-columns:{compare_grid_cols};"},
                     ui.div("Stat", class_="compare-stat-label"),
-                    ui.div(source_profile["player_name"], class_="compare-stat-player"),
-                    ui.div(target_profile["player_name"], class_="compare-stat-player"),
+                    *[ui.div(profile["player_name"], class_="compare-stat-player") for profile in profiles],
                 ),
                 *pc_rows,
                 class_="compare-section",
@@ -1134,36 +1146,43 @@ def make_similarity_compare_modal(source_profile, target_profile, comparison_ori
     for category_key, category_label, stats in SIMILARITY_COMPARE_CATEGORIES:
         stat_rows = []
         for stat_key, stat_label in stats:
+            row_children = [ui.div(stat_label, class_="compare-stat-label")]
+            for profile in profiles:
+                row_children.append(
+                    ui.div(
+                        _format_compare_value(stat_key, profile.get(stat_key)),
+                        class_="compare-stat-value",
+                    )
+                )
             stat_rows.append(
                 ui.div(
-                    {"class": "compare-stat-row"},
-                    ui.div(stat_label, class_="compare-stat-label"),
-                    ui.div(_format_compare_value(stat_key, source_profile.get(stat_key)), class_="compare-stat-value"),
-                    ui.div(_format_compare_value(stat_key, target_profile.get(stat_key)), class_="compare-stat-value"),
+                    {"class": "compare-stat-row", "style": f"grid-template-columns:{compare_grid_cols};"},
+                    *row_children,
                 )
             )
-        source_grade = _as_float(source_profile.get(f"{category_key}_grade"))
-        target_grade = _as_float(target_profile.get(f"{category_key}_grade"))
         grade_note = ui.div(
-            ui.span(
-                f"{source_profile['player_name']}: {source_grade:.0f}" if np.isfinite(source_grade) else f"{source_profile['player_name']}: \u2014",
-                class_="compare-grade-pill",
-            ),
-            ui.span(
-                f"{target_profile['player_name']}: {target_grade:.0f}" if np.isfinite(target_grade) else f"{target_profile['player_name']}: \u2014",
-                class_="compare-grade-pill",
-            ),
+            *[
+                ui.span(
+                    (
+                        f"{profile['player_name']}: {_as_float(profile.get(f'{category_key}_grade')):.0f}"
+                        if np.isfinite(_as_float(profile.get(f"{category_key}_grade")))
+                        else f"{profile['player_name']}: \u2014"
+                    ),
+                    class_="compare-grade-pill",
+                )
+                for profile in profiles
+            ],
             class_="compare-grade-row",
+            style=f"grid-template-columns:{grade_cols};",
         )
         category_sections.append(
             ui.div(
                 ui.div(category_label, class_="compare-section-title"),
                 grade_note,
                 ui.div(
-                    {"class": "compare-stat-head"},
+                    {"class": "compare-stat-head", "style": f"grid-template-columns:{compare_grid_cols};"},
                     ui.div("Stat", class_="compare-stat-label"),
-                    ui.div(source_profile["player_name"], class_="compare-stat-player"),
-                    ui.div(target_profile["player_name"], class_="compare-stat-player"),
+                    *[ui.div(profile["player_name"], class_="compare-stat-player") for profile in profiles],
                 ),
                 *stat_rows,
                 class_="compare-section",
@@ -1197,19 +1216,22 @@ def make_similarity_compare_modal(source_profile, target_profile, comparison_ori
     body = ui.div(
         {"id": "compare-detail-body"},
         ui.div(
-            {"class": "compare-player-grid"},
-            ui.div(
-                ui.div(source_profile["player_name"], class_="compare-player-name"),
-                ui.div(source_profile.get("subtitle", ""), class_="compare-player-sub"),
-                ui.div(f"Height: {source_height}", class_="compare-player-sub"),
-                class_="compare-player-card",
-            ),
-            ui.div(
-                ui.div(target_profile["player_name"], class_="compare-player-name"),
-                ui.div(target_profile.get("subtitle", ""), class_="compare-player-sub"),
-                ui.div(f"Height: {target_height}", class_="compare-player-sub"),
-                class_="compare-player-card",
-            ),
+            {
+                "class": "compare-player-grid",
+                "style": f"grid-template-columns:repeat({len(profiles)}, minmax(0, 1fr));",
+            },
+            *[
+                ui.div(
+                    ui.div(profile["player_name"], class_="compare-player-name"),
+                    ui.div(profile.get("subtitle", ""), class_="compare-player-sub"),
+                    ui.div(
+                        f"Height: {_format_compare_value('height_inches', profile.get('height_inches'))}",
+                        class_="compare-player-sub",
+                    ),
+                    class_="compare-player-card",
+                )
+                for profile in profiles
+            ],
         ),
         ui.div(
             {"class": "compare-modal-shell"},
@@ -1257,16 +1279,24 @@ def historical_comps_for_player(row, n_comp: int = 5, pool_key: str = "all"):
             "target_name": comp.get("target_player_name", ""),
             "target_team": comp.get("target_team", ""),
             "target_conf": comp.get("target_conf", ""),
+            "next_name": comp.get("next_player_name", ""),
+            "next_team": comp.get("next_team", ""),
+            "next_conf": comp.get("next_conf", ""),
+            "next_season": int(comp.get("next_season", 0)) if pd.notna(comp.get("next_season", np.nan)) else None,
         }
         for category_key, _category_label, stats in SIMILARITY_COMPARE_CATEGORIES:
             for stat_key, _stat_label in stats:
                 comp_payload[f"target_{stat_key}"] = comp.get(f"target_{stat_key}", np.nan)
                 comp_payload[f"match_{stat_key}"] = comp.get(f"match_{stat_key}", np.nan)
+                comp_payload[f"next_{stat_key}"] = comp.get(f"next_{stat_key}", np.nan)
             comp_payload[f"target_{category_key}_grade"] = comp.get(
                 f"target_{category_key}_grade", np.nan
             )
             comp_payload[f"match_{category_key}_grade"] = comp.get(
                 f"match_{category_key}_grade", np.nan
+            )
+            comp_payload[f"next_{category_key}_grade"] = comp.get(
+                f"next_{category_key}_grade", np.nan
             )
         comps.append(comp_payload)
     return comps
@@ -1515,6 +1545,10 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
             "target_team": comp["team"],
             "target_season": comp["season"],
             "target_conf": comp["conf"],
+            "next_name": comp.get("next_name", ""),
+            "next_team": comp.get("next_team", ""),
+            "next_conf": comp.get("next_conf", ""),
+            "next_season": comp.get("next_season"),
             "target_name_current": comp.get("target_name", ""),
             "target_team_current": comp.get("target_team", ""),
             "target_conf_current": comp.get("target_conf", ""),
@@ -1522,9 +1556,10 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                 key: comp.get(key)
                 for category_key, _category_label, stats in SIMILARITY_COMPARE_CATEGORIES
                 for key in (
-                    [f"target_{category_key}_grade", f"match_{category_key}_grade"]
+                    [f"target_{category_key}_grade", f"match_{category_key}_grade", f"next_{category_key}_grade"]
                     + [f"target_{stat_key}" for stat_key, _ in stats]
                     + [f"match_{stat_key}" for stat_key, _ in stats]
+                    + [f"next_{stat_key}" for stat_key, _ in stats]
                 )
             },
         })
@@ -1572,8 +1607,8 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
     )
     similarity_sub = (
         (
-            "D-I only · players who later transferred to the Big West"
-            if historical_pool == "big_west_transfers"
+            "D-I only · players who played in the Big West the following season"
+            if historical_pool == "big_west_next_year"
             else "D-I only · full historical pool"
         )
         if show_historical
@@ -3945,6 +3980,7 @@ def server(input, output, session):
         source_row = source_rows.iloc[0]
         source_profile = _current_d1_compare_profile(source_row)
         compare_mode = str(payload.get("mode", "historical")).strip() or "historical"
+        future_profile = None
         if compare_mode == "current":
             target_id = str(payload.get("target_id", "")).strip()
             target_rows = d1_df[d1_df["id"] == target_id]
@@ -3990,8 +4026,35 @@ def server(input, output, session):
                 "year": payload.get("target_season"),
                 "subtitle": " \u00b7 ".join([bit for bit in subtitle_bits if bit]),
             })
+            next_name = str(payload.get("next_name", "")).strip()
+            if next_name:
+                next_subtitle_bits = [
+                    str(payload.get("next_team", "")).strip(),
+                    str(payload.get("next_season", "") or "").strip(),
+                    str(payload.get("next_conf", "")).strip(),
+                ]
+                future_profile = _profile_from_neighbor_payload(
+                    payload,
+                    "next",
+                    subtitle=" \u00b7 ".join([bit for bit in next_subtitle_bits if bit]),
+                    year=_as_float(payload.get("next_season")),
+                )
+                future_profile.update({
+                    "player_name": next_name,
+                    "team": str(payload.get("next_team", "")).strip(),
+                    "conf": str(payload.get("next_conf", "")).strip(),
+                    "year": payload.get("next_season"),
+                    "subtitle": " \u00b7 ".join([bit for bit in next_subtitle_bits if bit]),
+                })
         compare_req.set(payload)
-        ui.modal_show(make_similarity_compare_modal(source_profile, target_profile, compare_mode))
+        ui.modal_show(
+            make_similarity_compare_modal(
+                source_profile,
+                target_profile,
+                compare_mode,
+                future_profile=future_profile,
+            )
+        )
 
     @reactive.effect
     @reactive.event(input.modal_compare_back)
