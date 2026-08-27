@@ -1100,6 +1100,15 @@ def _current_d1_compare_profile(row):
     return _current_compare_profile_from_row(row)
 
 
+def _compare_header_name(profile) -> str:
+    name = str(profile.get("player_name", "")).strip() or "Player"
+    year = pd.to_numeric(pd.Series([profile.get("year")]), errors="coerce").iloc[0]
+    if pd.isna(year):
+        return name
+    year_suffix = int(year) % 100
+    return f"{name} '{year_suffix:02d}"
+
+
 def make_similarity_compare_modal(
     source_profile,
     target_profile,
@@ -1111,7 +1120,6 @@ def make_similarity_compare_modal(
         profiles.append(future_profile)
 
     compare_grid_cols = f"minmax(0, 1.2fr) {' '.join(['minmax(0, 1fr)' for _ in profiles])}"
-    grade_cols = " ".join(["minmax(0, 1fr)" for _ in profiles])
 
     pc_section = ui.div()
     if comparison_origin == "current":
@@ -1136,7 +1144,7 @@ def make_similarity_compare_modal(
                 ui.div(
                     {"class": "compare-stat-head", "style": f"grid-template-columns:{compare_grid_cols};"},
                     ui.div("Stat", class_="compare-stat-label"),
-                    *[ui.div(profile["player_name"], class_="compare-stat-player") for profile in profiles],
+                    *[ui.div(_compare_header_name(profile), class_="compare-stat-player") for profile in profiles],
                 ),
                 *pc_rows,
                 class_="compare-section",
@@ -1160,29 +1168,13 @@ def make_similarity_compare_modal(
                     *row_children,
                 )
             )
-        grade_note = ui.div(
-            *[
-                ui.span(
-                    (
-                        f"{profile['player_name']}: {_as_float(profile.get(f'{category_key}_grade')):.0f}"
-                        if np.isfinite(_as_float(profile.get(f"{category_key}_grade")))
-                        else f"{profile['player_name']}: \u2014"
-                    ),
-                    class_="compare-grade-pill",
-                )
-                for profile in profiles
-            ],
-            class_="compare-grade-row",
-            style=f"grid-template-columns:{grade_cols};",
-        )
         category_sections.append(
             ui.div(
                 ui.div(category_label, class_="compare-section-title"),
-                grade_note,
                 ui.div(
                     {"class": "compare-stat-head", "style": f"grid-template-columns:{compare_grid_cols};"},
                     ui.div("Stat", class_="compare-stat-label"),
-                    *[ui.div(profile["player_name"], class_="compare-stat-player") for profile in profiles],
+                    *[ui.div(_compare_header_name(profile), class_="compare-stat-player") for profile in profiles],
                 ),
                 *stat_rows,
                 class_="compare-section",
@@ -1191,14 +1183,15 @@ def make_similarity_compare_modal(
 
     footer_buttons = [
         ui.tags.button(
-            {
-                "class": "pill-btn active",
-                "onclick": (
-                    f"Shiny.setInputValue('modal_compare_back','{source_profile.get('player_id', '')}',{{priority:'event'}})"
-                ),
-            },
-            "Back to player",
-        )
+                {
+                    "class": "pill-btn active",
+                    "onclick": (
+                        "window.__compareModalNavigating = true;"
+                        f"Shiny.setInputValue('modal_compare_back','{source_profile.get('player_id', '')}',{{priority:'event'}})"
+                    ),
+                },
+                "Back to player",
+            )
     ]
     if target_profile.get("player_id"):
         footer_buttons.append(
@@ -1206,6 +1199,7 @@ def make_similarity_compare_modal(
                 {
                     "class": "pill-btn",
                     "onclick": (
+                        "window.__compareModalNavigating = true;"
                         f"Shiny.setInputValue('modal_compare_open_target','{target_profile['player_id']}',{{priority:'event'}})"
                     ),
                 },
@@ -1215,6 +1209,25 @@ def make_similarity_compare_modal(
 
     body = ui.div(
         {"id": "compare-detail-body"},
+        ui.tags.script(
+            ui.HTML(
+                f"""
+                setTimeout(function() {{
+                  const modal = document.querySelector('.modal.show');
+                  if (!modal || modal.dataset.compareDismissBound === '1') return;
+                  modal.dataset.compareDismissBound = '1';
+                  window.__compareModalNavigating = false;
+                  modal.addEventListener('hidden.bs.modal', function() {{
+                    if (window.__compareModalNavigating) {{
+                      window.__compareModalNavigating = false;
+                      return;
+                    }}
+                    Shiny.setInputValue('modal_compare_back', {json.dumps(source_profile.get("player_id", ""))}, {{priority:'event'}});
+                  }}, {{ once: true }});
+                }}, 0);
+                """
+            )
+        ),
         ui.div(
             {
                 "class": "compare-player-grid",
@@ -1540,6 +1553,7 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
             meta_bits.append(f"· {comp['conf']}")
         compare_payload = json.dumps({
             "mode": "historical",
+            "historical_pool": historical_pool,
             "source_id": player_id,
             "target_name": comp["name"],
             "target_team": comp["team"],
@@ -4027,7 +4041,7 @@ def server(input, output, session):
                 "subtitle": " \u00b7 ".join([bit for bit in subtitle_bits if bit]),
             })
             next_name = str(payload.get("next_name", "")).strip()
-            if next_name:
+            if next_name and str(payload.get("historical_pool", "")).strip() == "big_west_next_year":
                 next_subtitle_bits = [
                     str(payload.get("next_team", "")).strip(),
                     str(payload.get("next_season", "") or "").strip(),
