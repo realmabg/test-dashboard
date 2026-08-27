@@ -4077,6 +4077,7 @@ def server(input, output, session):
         if not pid:
             return
         import random
+        ui.modal_remove()
         modal_req.set((pid, random.random()))
 
     @reactive.effect
@@ -4086,6 +4087,7 @@ def server(input, output, session):
         if not pid:
             return
         import random
+        ui.modal_remove()
         modal_req.set((pid, random.random()))
 
     # ── Open modal from watchlist card ────────────────────────────────────
