@@ -1536,6 +1536,7 @@ def historical_compare_profile_from_row(row):
 def make_historical_profile_modal(row):
     source_profile = historical_compare_profile_from_row(row)
     comps = historical_current_comps_for_player(row)
+    pc = ARCHETYPE_COLOR.get(str(row.get("archetype", "") or ""), POS_COLOR.get(str(row.get("pos", "") or ""), "#888"))
     meta_badges = []
     for value in (
         str(row.get("pos", "") or "").strip(),
@@ -1562,14 +1563,47 @@ def make_historical_profile_modal(row):
         ("RPG", f"{_as_float(row.get('treb_per_game')):.1f}" if pd.notna(_as_float(row.get("treb_per_game"))) else "—", True),
         ("BPM", f"{_as_float(row.get('bpm')):.1f}" if pd.notna(_as_float(row.get("bpm"))) else "—", True),
     ]
-    category_rows = []
+    grade_rows = []
     for category_key, category_label, _stats in SIMILARITY_COMPARE_CATEGORIES:
         grade_value = _as_float(source_profile.get(f"{category_key}_grade"))
-        category_rows.append(
+        if not np.isfinite(grade_value):
+            grade_value = 0.0
+        grade_rows.append(
             ui.div(
-                {"class": "historical-profile-grade-row"},
-                ui.div(category_label, class_="historical-profile-grade-label"),
-                ui.div("—" if not np.isfinite(grade_value) else f"{grade_value:.0f}", class_="historical-profile-grade-value"),
+                {"class": "arch-score-row"},
+                ui.div(
+                    ui.span(category_label, class_="arch-score-name"),
+                    ui.span(f"{grade_value:.0f}", class_="arch-score-value"),
+                    class_="arch-score-head",
+                ),
+                ui.div(
+                    {"class": "arch-score-track"},
+                    ui.div(
+                        {
+                            "class": "arch-score-fill",
+                            "style": f"width:{max(0.0, min(100.0, grade_value)):.1f}%;background:{pc};",
+                        }
+                    ),
+                ),
+            )
+        )
+
+    stat_sections = []
+    for _category_key, category_label, stats in SIMILARITY_COMPARE_CATEGORIES:
+        rows = []
+        for stat_key, stat_label in stats:
+            rows.append(
+                ui.div(
+                    {"class": "compare-stat-row", "style": "grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);"},
+                    ui.div(stat_label, class_="compare-stat-label"),
+                    ui.div(_format_compare_value(stat_key, source_profile.get(stat_key)), class_="compare-stat-value"),
+                )
+            )
+        stat_sections.append(
+            ui.div(
+                ui.div(category_label, class_="compare-section-title"),
+                *rows,
+                class_="compare-section historical-profile-section",
             )
         )
 
@@ -1607,30 +1641,32 @@ def make_historical_profile_modal(row):
     )
 
     body = ui.div(
-        {"class": "historical-profile-modal"},
+        {"id": "detail-body"},
         ui.div(
-            {"class": "historical-profile-hero"},
+            {"class": "detail-col"},
             ui.div(source_profile["player_name"], class_="player-name"),
-            ui.div(source_profile["subtitle"], class_="player-team"),
-            ui.div(*meta_badges, class_="historical-profile-badges") if meta_badges else ui.div(),
-        ),
-        ui.div(
-            {"class": "historical-profile-grid"},
             ui.div(
-                ui.div("Historical Summary", class_="col-title"),
-                ui.div(
-                    {"class": "bio-grid historical-profile-bio-grid"},
-                    *[bio_item(label, value, mono=mono) for label, value, mono in summary_items],
-                ),
-                class_="arch-score-panel",
+                ui.span({"class": "team-dot", "style": f"background:{pc}"}),
+                source_profile["subtitle"],
+                class_="player-team",
+            ),
+            ui.div(*meta_badges, class_="player-team", style="margin-top:8px;flex-wrap:wrap;") if meta_badges else ui.div(),
+            ui.div(
+                {"class": "bio-grid"},
+                *[bio_item(label, value, mono=mono) for label, value, mono in summary_items],
             ),
             ui.div(
                 ui.div("Similarity Grades", class_="col-title"),
-                ui.div({"class": "historical-profile-grade-list"}, *category_rows),
+                *grade_rows,
                 class_="arch-score-panel",
             ),
         ),
-        comps_section,
+        ui.div(
+            {"class": "detail-col"},
+            ui.div("Similarity Inputs", class_="col-title"),
+            *stat_sections,
+            comps_section,
+        ),
     )
     return ui.modal(
         body,
@@ -4038,24 +4074,25 @@ app_ui = ui.page_fluid(
                 background:transparent !important;
                 box-shadow:none !important;
                 width:100% !important;
-                min-height:44px !important;
+                min-height:0 !important;
             }
             .historical-header-card .selectize-control .selectize-input {
                 background:transparent !important;
                 border:none !important;
+                border-bottom:1px solid rgba(89,113,154,.34) !important;
                 color:var(--ink) !important;
                 border-radius:0 !important;
-                min-height:44px !important;
+                min-height:0 !important;
                 box-shadow:none !important;
                 display:flex;
                 align-items:center;
                 gap:6px;
-                padding:11px 26px 11px 6px !important;
+                padding:2px 26px 8px 0 !important;
                 width:100% !important;
                 outline:none !important;
             }
             .historical-header-card .selectize-control.multi .selectize-input {
-                padding-right:6px !important;
+                padding:2px 0 8px 0 !important;
             }
             .historical-header-card .selectize-control .selectize-input.input-active,
             .historical-header-card .selectize-control .selectize-input.dropdown-active,
@@ -4074,7 +4111,7 @@ app_ui = ui.page_fluid(
                 flex-wrap:wrap !important;
                 gap:6px !important;
                 align-items:center !important;
-                padding:11px 6px !important;
+                padding:2px 0 8px 0 !important;
             }
             .historical-header-card .selectize-input > .item {
                 background:rgba(73,106,164,.16) !important;
@@ -4105,11 +4142,14 @@ app_ui = ui.page_fluid(
                 margin:0 !important;
                 flex:1 1 100% !important;
                 width:100% !important;
+                line-height:1.4 !important;
             }
             .historical-header-card .selectize-control.single .selectize-input:after,
             .historical-header-card .selectize-control.multi .selectize-input:after {
                 border-color:var(--ink-3) transparent transparent transparent !important;
-                right:-2px !important;
+                right:2px !important;
+                top:50% !important;
+                margin-top:-2px !important;
             }
             .historical-header-card input[type="text"] {
                 width:100%;
