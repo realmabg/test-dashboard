@@ -1429,6 +1429,7 @@ HISTORICAL_COMPARE_SCORE_COLUMNS = [
 HISTORICAL_COMPARE_GRADE_COLUMNS = [
     f"{category_key}_grade" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES
 ]
+HISTORICAL_COMPARE_FALLBACK_COLUMNS = [*CURRENT_TO_COMPARE_KEY.keys(), "height_inches"]
 
 
 def _current_compare_profile_from_row(row):
@@ -1682,16 +1683,7 @@ def make_historical_profile_modal(row):
 def historical_current_comps_for_player(row, n_comp: int = HISTORICAL_CURRENT_COMP_LIMIT):
     if HISTORICAL_CURRENT_POOL.empty:
         return []
-    row_scores = np.array([_as_float(row.get(col)) for col in HISTORICAL_COMPARE_SCORE_COLUMNS], dtype=float)
-    if not np.isfinite(row_scores).all():
-        return []
     pool = HISTORICAL_CURRENT_POOL.copy()
-    pool = pool.dropna(subset=HISTORICAL_COMPARE_SCORE_COLUMNS).copy()
-    if pool.empty:
-        return []
-    pool_scores = pool[HISTORICAL_COMPARE_SCORE_COLUMNS].to_numpy(dtype=float)
-    dists = np.sqrt(((pool_scores - row_scores) ** 2).sum(axis=1))
-    pool["historical_distance"] = dists
     source_name_key = normalize_lookup_key(row.get("player_name"))
     source_team_key = normalize_lookup_key(row.get("team"))
     pool = pool[
@@ -1700,6 +1692,43 @@ def historical_current_comps_for_player(row, n_comp: int = HISTORICAL_CURRENT_CO
             & pool["team"].map(normalize_lookup_key).eq(source_team_key)
         )
     ].copy()
+    if pool.empty:
+        return []
+
+    score_cols = [
+        col for col in HISTORICAL_COMPARE_SCORE_COLUMNS
+        if np.isfinite(_as_float(row.get(col)))
+    ]
+    if len(score_cols) >= 3:
+        score_pool = pool.dropna(subset=score_cols).copy()
+        if not score_pool.empty:
+            row_scores = np.array([_as_float(row.get(col)) for col in score_cols], dtype=float)
+            pool_scores = score_pool[score_cols].to_numpy(dtype=float)
+            score_pool["historical_distance"] = np.sqrt(((pool_scores - row_scores) ** 2).sum(axis=1))
+            pool = score_pool
+        else:
+            score_cols = []
+
+    if len(score_cols) < 3:
+        fallback_cols = [
+            col for col in HISTORICAL_COMPARE_FALLBACK_COLUMNS
+            if np.isfinite(_as_float(row.get(col))) and col in pool.columns
+        ]
+        fallback_pool = pool.dropna(subset=fallback_cols).copy() if fallback_cols else pd.DataFrame()
+        if fallback_pool.empty:
+            return []
+        row_values = np.array([_as_float(row.get(col)) for col in fallback_cols], dtype=float)
+        pool_values = fallback_pool[fallback_cols].to_numpy(dtype=float)
+        means = np.nanmean(pool_values, axis=0)
+        stds = np.nanstd(pool_values, axis=0)
+        valid = stds > 1e-8
+        if not valid.any():
+            return []
+        row_z = (row_values[valid] - means[valid]) / stds[valid]
+        pool_z = (pool_values[:, valid] - means[valid]) / stds[valid]
+        fallback_pool["historical_distance"] = np.sqrt(((pool_z - row_z) ** 2).sum(axis=1))
+        pool = fallback_pool
+
     pool = pool.sort_values(["historical_distance", "mpg"], ascending=[True, False]).head(n_comp)
     comps = []
     for idx, comp in pool.iterrows():
@@ -4087,12 +4116,12 @@ app_ui = ui.page_fluid(
                 display:flex;
                 align-items:center;
                 gap:6px;
-                padding:2px 26px 8px 0 !important;
+                padding:6px 26px 10px 14px !important;
                 width:100% !important;
                 outline:none !important;
             }
             .historical-header-card .selectize-control.multi .selectize-input {
-                padding:2px 0 8px 0 !important;
+                padding:6px 10px 10px 14px !important;
             }
             .historical-header-card .selectize-control .selectize-input.input-active,
             .historical-header-card .selectize-control .selectize-input.dropdown-active,
@@ -4111,7 +4140,7 @@ app_ui = ui.page_fluid(
                 flex-wrap:wrap !important;
                 gap:6px !important;
                 align-items:center !important;
-                padding:2px 0 8px 0 !important;
+                padding:6px 10px 10px 14px !important;
             }
             .historical-header-card .selectize-input > .item {
                 background:rgba(73,106,164,.16) !important;
