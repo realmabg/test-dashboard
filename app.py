@@ -3923,9 +3923,9 @@ app_ui = ui.page_fluid(
             }
             .historical-header-card .selectize-control {
                 margin-bottom:0;
-                padding:0 12px !important;
-                border:1px solid var(--rule) !important;
-                background:rgba(10,16,27,.7) !important;
+                padding:0 !important;
+                border:none !important;
+                background:transparent !important;
                 box-shadow:none !important;
                 width:100% !important;
                 min-height:44px !important;
@@ -3942,13 +3942,17 @@ app_ui = ui.page_fluid(
                 gap:6px;
                 padding:9px 22px 9px 0 !important;
                 width:100% !important;
+                outline:none !important;
             }
             .historical-header-card .selectize-control.multi .selectize-input {
                 padding-right:0 !important;
             }
             .historical-header-card .selectize-control .selectize-input.input-active,
-            .historical-header-card .selectize-control .selectize-input.dropdown-active {
+            .historical-header-card .selectize-control .selectize-input.dropdown-active,
+            .historical-header-card .selectize-control .selectize-input.focus {
                 background:transparent !important;
+                border:none !important;
+                box-shadow:none !important;
             }
             .historical-header-card .selectize-dropdown {
                 background:#131b29;
