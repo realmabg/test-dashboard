@@ -1191,9 +1191,13 @@ def make_historical_beta_tab():
                         ui.input_selectize(
                             "hist_season",
                             None,
-                            choices={"": "All seasons", **{str(year): str(year) for year in HISTORICAL_FILTER_YEARS}},
-                            selected=str(HISTORICAL_FILTER_YEARS[0]) if HISTORICAL_FILTER_YEARS else "",
-                            options={"placeholder": "Any season"},
+                            choices={str(year): str(year) for year in HISTORICAL_FILTER_YEARS},
+                            selected=[],
+                            multiple=True,
+                            options={
+                                "placeholder": "Any season",
+                                "plugins": ["remove_button"],
+                            },
                         ),
                     ),
                     ui.div(
@@ -1202,9 +1206,13 @@ def make_historical_beta_tab():
                         ui.input_selectize(
                             "hist_conf",
                             None,
-                            choices={"": "All conferences", **{conf: conf for conf in HISTORICAL_FILTER_CONFS}},
-                            selected="",
-                            options={"placeholder": "Any conference"},
+                            choices={conf: conf for conf in HISTORICAL_FILTER_CONFS},
+                            selected=[],
+                            multiple=True,
+                            options={
+                                "placeholder": "Any conference",
+                                "plugins": ["remove_button"],
+                            },
                         ),
                     ),
                     ui.div(
@@ -1213,20 +1221,28 @@ def make_historical_beta_tab():
                         ui.input_selectize(
                             "hist_team",
                             None,
-                            choices={"": "All teams", **{team: team for team in HISTORICAL_FILTER_TEAMS}},
-                            selected="",
-                            options={"placeholder": "Any team"},
+                            choices={team: team for team in HISTORICAL_FILTER_TEAMS},
+                            selected=[],
+                            multiple=True,
+                            options={
+                                "placeholder": "Any team",
+                                "plugins": ["remove_button"],
+                            },
                         ),
                     ),
                     ui.div(
-                        {"class": "historical-filter-field historical-filter-field--sm"},
+                        {"class": "historical-filter-field"},
                         ui.div("Pos", class_="historical-filter-title"),
                         ui.input_selectize(
                             "hist_pos",
                             None,
-                            choices={"": "All positions", **{pos: pos for pos in POSITIONS}},
-                            selected="",
-                            options={"placeholder": "Any position"},
+                            choices={pos: pos for pos in POSITIONS},
+                            selected=[],
+                            multiple=True,
+                            options={
+                                "placeholder": "Any position",
+                                "plugins": ["remove_button"],
+                            },
                         ),
                     ),
                     ui.div(
@@ -1235,14 +1251,19 @@ def make_historical_beta_tab():
                         ui.input_selectize(
                             "hist_archetype",
                             None,
-                            choices={"": "All archetypes", **{arch: arch for arch in HISTORICAL_BETA_ARCHETYPES}},
-                            selected="",
-                            options={"placeholder": "Any archetype"},
+                            choices={arch: arch for arch in HISTORICAL_BETA_ARCHETYPES},
+                            selected=[],
+                            multiple=True,
+                            options={
+                                "placeholder": "Any archetype",
+                                "plugins": ["remove_button"],
+                            },
                         ),
                     ),
                     ui.div(
                         {"class": "historical-filter-field historical-filter-field--slider"},
                         ui.div("Height range", class_="historical-filter-title"),
+                        ui.output_text("hist_height_range_label"),
                         ui.input_slider(
                             "hist_height",
                             None,
@@ -1478,6 +1499,13 @@ def format_season_short(year: object) -> str:
     if not np.isfinite(num):
         return ""
     return f"'{int(round(num)) % 100:02d}"
+
+
+def inches_display(value: object) -> str:
+    num = _as_float(value)
+    if not np.isfinite(num):
+        return "\u2014"
+    return height_str(int(round(num)))
 
 
 def historical_profile_subtitle(row) -> str:
@@ -3671,6 +3699,9 @@ app_ui = ui.page_fluid(
             .tab-panel.active {
                 flex:1; height:auto; overflow:hidden;
             }
+            #hist-tab.tab-panel.active {
+                overflow-y:auto;
+            }
 
             /* ── Guide / documentation page ────────────────────── */
             .doc-shell {
@@ -3874,6 +3905,12 @@ app_ui = ui.page_fluid(
                 font-weight:700;
                 margin-bottom:8px;
             }
+            .historical-height-note {
+                color:var(--ink-3);
+                font-family:var(--mono);
+                font-size:11px;
+                margin-bottom:6px;
+            }
             .historical-header-card .shiny-input-container {
                 margin-bottom:0;
             }
@@ -3891,6 +3928,25 @@ app_ui = ui.page_fluid(
                 border-color:var(--rule);
                 color:var(--ink);
             }
+            .historical-header-card .selectize-input.items {
+                display:flex !important;
+                flex-wrap:wrap !important;
+                gap:6px !important;
+                align-items:center !important;
+                padding:8px 12px !important;
+            }
+            .historical-header-card .selectize-input > .item {
+                background:rgba(200,168,75,.14) !important;
+                color:var(--ink) !important;
+                border:1px solid rgba(200,168,75,.35) !important;
+                border-radius:999px !important;
+                padding:2px 8px !important;
+                text-shadow:none !important;
+                max-width:100%;
+            }
+            .historical-header-card .selectize-input.items.not-full > input {
+                min-width:100% !important;
+            }
             .historical-header-card input[type="text"] {
                 width:100%;
                 padding:11px 14px;
@@ -3906,9 +3962,6 @@ app_ui = ui.page_fluid(
             .historical-filter-field {
                 grid-column:span 2;
                 min-width:0;
-            }
-            .historical-filter-field--sm {
-                grid-column:span 1;
             }
             .historical-filter-field--slider {
                 grid-column:span 3;
@@ -4448,21 +4501,22 @@ def server(input, output, session):
         q = (input.hist_q() or "").strip().lower()
         if q:
             d = d[d["player_name"].str.lower().str.contains(q, na=False)]
-        season = str(input.hist_season() or "").strip()
-        if season:
-            d = d[d["year"].eq(pd.to_numeric(season, errors="coerce"))]
-        conf = str(input.hist_conf() or "").strip()
-        if conf:
-            d = d[d["conf"].eq(conf)]
-        team = str(input.hist_team() or "").strip()
-        if team:
-            d = d[d["team"].eq(team)]
-        pos = str(input.hist_pos() or "").strip()
-        if pos:
-            d = d[d["pos"].eq(pos)]
-        archetype = str(input.hist_archetype() or "").strip()
-        if archetype:
-            d = d[d["archetype"].eq(archetype)]
+        seasons = [pd.to_numeric(value, errors="coerce") for value in list(input.hist_season() or [])]
+        seasons = [float(value) for value in seasons if pd.notna(value)]
+        if seasons:
+            d = d[d["year"].isin(seasons)]
+        confs = [str(value).strip() for value in list(input.hist_conf() or []) if str(value).strip()]
+        if confs:
+            d = d[d["conf"].isin(confs)]
+        teams = [str(value).strip() for value in list(input.hist_team() or []) if str(value).strip()]
+        if teams:
+            d = d[d["team"].isin(teams)]
+        positions = [str(value).strip() for value in list(input.hist_pos() or []) if str(value).strip()]
+        if positions:
+            d = d[d["pos"].isin(positions)]
+        archetypes = [str(value).strip() for value in list(input.hist_archetype() or []) if str(value).strip()]
+        if archetypes:
+            d = d[d["archetype"].isin(archetypes)]
         classes = list(input.hist_class() or [])
         if classes:
             d = d[d["class"].isin(classes)]
@@ -5508,6 +5562,12 @@ def server(input, output, session):
         total = len(hist_filtered())
         shown = len(hist_display_rows())
         return f"{shown} of {total} matching players"
+
+    @output
+    @render.text
+    def hist_height_range_label():
+        lo, hi = safe_range_input(input.hist_height(), HISTORICAL_PLAYER_INDEX, "height_inches", 1)
+        return f"{inches_display(lo)} to {inches_display(hi)}"
 
     @output
     @render.ui
