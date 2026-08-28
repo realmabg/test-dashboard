@@ -1633,19 +1633,10 @@ def make_historical_profile_modal(row):
             )
         )
 
-    comps_section = ui.div(
-        ui.div("Current Player Comps", class_="col-title"),
-        ui.div({"class": "historical-comp-list"}, *comp_cards) if comp_cards else ui.div(
-            "No current-player comps are available for this profile yet.",
-            class_="qual-note",
-        ),
-        class_="arch-score-panel",
-    )
-
     body = ui.div(
-        {"id": "detail-body"},
+        {"class": "historical-profile-grid"},
         ui.div(
-            {"class": "detail-col"},
+            {"class": "historical-profile-col"},
             ui.div(source_profile["player_name"], class_="player-name"),
             ui.div(
                 ui.span({"class": "team-dot", "style": f"background:{pc}"}),
@@ -1664,10 +1655,20 @@ def make_historical_profile_modal(row):
             ),
         ),
         ui.div(
-            {"class": "detail-col"},
+            {"class": "historical-profile-col"},
             ui.div("Similarity Inputs", class_="col-title"),
             *stat_sections,
-            comps_section,
+        ),
+        ui.div(
+            {"class": "historical-profile-col"},
+            ui.div(
+                ui.div("Current Player Comps", class_="col-title"),
+                ui.div({"class": "historical-comp-list"}, *comp_cards) if comp_cards else ui.div(
+                    "No current-player comps are available for this profile yet.",
+                    class_="qual-note",
+                ),
+                class_="arch-score-panel historical-profile-comps",
+            ),
         ),
     )
     return ui.modal(
@@ -4120,17 +4121,19 @@ app_ui = ui.page_fluid(
                 border-bottom:1px solid rgba(89,113,154,.34) !important;
                 color:var(--ink) !important;
                 border-radius:0 !important;
-                min-height:0 !important;
+                min-height:48px !important;
                 box-shadow:none !important;
                 display:flex;
                 align-items:center;
+                align-content:center;
                 gap:6px;
-                padding:6px 26px 10px 14px !important;
+                padding:10px 34px 12px 18px !important;
                 width:100% !important;
                 outline:none !important;
             }
             .historical-header-card .selectize-control.multi .selectize-input {
-                padding:6px 10px 10px 14px !important;
+                min-height:48px !important;
+                padding:10px 34px 12px 18px !important;
             }
             .historical-header-card .selectize-control .selectize-input.input-active,
             .historical-header-card .selectize-control .selectize-input.dropdown-active,
@@ -4149,7 +4152,8 @@ app_ui = ui.page_fluid(
                 flex-wrap:wrap !important;
                 gap:6px !important;
                 align-items:center !important;
-                padding:6px 10px 10px 14px !important;
+                min-height:48px !important;
+                padding:10px 34px 12px 18px !important;
             }
             .historical-header-card .selectize-input > .item {
                 background:rgba(73,106,164,.16) !important;
@@ -4180,12 +4184,13 @@ app_ui = ui.page_fluid(
                 margin:0 !important;
                 flex:1 1 100% !important;
                 width:100% !important;
-                line-height:1.4 !important;
+                line-height:1.45 !important;
+                padding:0 !important;
             }
             .historical-header-card .selectize-control.single .selectize-input:after,
             .historical-header-card .selectize-control.multi .selectize-input:after {
                 border-color:var(--ink-3) transparent transparent transparent !important;
-                right:2px !important;
+                right:12px !important;
                 top:50% !important;
                 margin-top:-2px !important;
             }
@@ -4413,11 +4418,30 @@ app_ui = ui.page_fluid(
             }
             .historical-profile-grid {
                 display:grid;
-                grid-template-columns:1.35fr .9fr;
+                grid-template-columns:minmax(280px, .9fr) minmax(360px, 1.15fr) minmax(260px, .95fr);
                 gap:18px;
+                align-items:start;
+            }
+            .historical-profile-col {
+                min-width:0;
+                display:grid;
+                gap:16px;
+                align-content:start;
             }
             .historical-profile-bio-grid {
                 grid-template-columns:repeat(4, minmax(0, 1fr));
+            }
+            .historical-profile-comps {
+                min-height:100%;
+            }
+            .historical-profile-comps .historical-comp-list {
+                grid-template-columns:1fr;
+            }
+            .historical-profile-comps .historical-comp-card {
+                padding:12px 13px;
+            }
+            .historical-profile-comps .historical-comp-name {
+                font-size:21px;
             }
             .historical-profile-grade-list {
                 display:grid;
