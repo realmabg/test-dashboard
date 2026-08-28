@@ -1331,7 +1331,7 @@ def make_historical_beta_tab():
             ui.div(
                 {"class": "historical-results-head"},
                 ui.output_text("hist_results_count"),
-                ui.div("Click a row to load current-player comps.", class_="historical-results-note"),
+                ui.div("Click a row to open a profile and load current-player comps.", class_="historical-results-note"),
             ),
             ui.output_ui("historical_table_ui"),
             ui.output_ui("historical_current_comps_ui"),
@@ -1531,6 +1531,116 @@ def historical_compare_profile_from_row(row):
     for grade_key in HISTORICAL_COMPARE_GRADE_COLUMNS:
         profile[grade_key] = _as_float(row.get(grade_key))
     return profile
+
+
+def make_historical_profile_modal(row):
+    source_profile = historical_compare_profile_from_row(row)
+    comps = historical_current_comps_for_player(row)
+    meta_badges = []
+    for value in (
+        str(row.get("pos", "") or "").strip(),
+        str(row.get("archetype", "") or "").strip(),
+        str(row.get("class", "") or "").strip(),
+        str(row.get("role", "") or "").strip(),
+    ):
+        if value:
+            meta_badges.append(ui.span(value, class_="pos-badge", style="color:var(--ink-2);border-color:var(--rule)"))
+
+    summary_items = [
+        ("Season", str(int(row["year"])) if pd.notna(row.get("year")) else "—", True),
+        ("Conference", str(row.get("conf", "") or "—"), False),
+        ("Team", str(row.get("team", "") or "—"), False),
+        ("Pos", str(row.get("pos", "") or "—"), False),
+        ("Archetype", str(row.get("archetype", "") or "—"), False),
+        ("Class", str(row.get("class", "") or "—"), False),
+        ("Role", str(row.get("role", "") or "—"), False),
+        ("Height", _format_compare_value("height_inches", row.get("height_inches")), True),
+        ("Games", str(int(row["GP"])) if pd.notna(row.get("GP")) else "—", True),
+        ("MPG", f"{_as_float(row.get('mins_per_game')):.1f}" if pd.notna(_as_float(row.get("mins_per_game"))) else "—", True),
+        ("PPG", f"{_as_float(row.get('pts_per_game')):.1f}" if pd.notna(_as_float(row.get("pts_per_game"))) else "—", True),
+        ("APG", f"{_as_float(row.get('ast_per_game')):.1f}" if pd.notna(_as_float(row.get("ast_per_game"))) else "—", True),
+        ("RPG", f"{_as_float(row.get('treb_per_game')):.1f}" if pd.notna(_as_float(row.get("treb_per_game"))) else "—", True),
+        ("BPM", f"{_as_float(row.get('bpm')):.1f}" if pd.notna(_as_float(row.get("bpm"))) else "—", True),
+    ]
+    category_rows = []
+    for category_key, category_label, _stats in SIMILARITY_COMPARE_CATEGORIES:
+        grade_value = _as_float(source_profile.get(f"{category_key}_grade"))
+        category_rows.append(
+            ui.div(
+                {"class": "historical-profile-grade-row"},
+                ui.div(category_label, class_="historical-profile-grade-label"),
+                ui.div("—" if not np.isfinite(grade_value) else f"{grade_value:.0f}", class_="historical-profile-grade-value"),
+            )
+        )
+
+    comp_cards = []
+    for comp in comps:
+        badge_color = ARCHETYPE_COLOR.get(
+            comp["profile"].get("primary_archetype", ""),
+            POS_COLOR.get(comp.get("pos", ""), "#888"),
+        )
+        comp_cards.append(
+            ui.div(
+                {
+                    "class": "historical-comp-card",
+                    "onclick": f"Shiny.setInputValue('hist_open_current_profile','{comp['player_id']}',{{priority:'event'}})",
+                },
+                ui.div(f"{comp['rank']:02d}", class_="historical-comp-rank"),
+                ui.div(comp["name"], class_="historical-comp-name"),
+                ui.div(
+                    ui.span(comp.get("archetype", ""), class_="pos-badge", style=f"color:{badge_color};border-color:{badge_color}") if comp.get("archetype") else ui.span(),
+                    ui.span(comp["team"]),
+                    ui.span(f"· {comp.get('cls', '')}") if comp.get("cls") else ui.span(),
+                    class_="historical-comp-meta",
+                ),
+                ui.div(f"distance {comp['distance']:.2f}", class_="historical-comp-distance"),
+            )
+        )
+
+    comps_section = ui.div(
+        ui.div("Current Player Comps", class_="col-title"),
+        ui.div({"class": "historical-comp-list"}, *comp_cards) if comp_cards else ui.div(
+            "No current-player comps are available for this profile yet.",
+            class_="qual-note",
+        ),
+        class_="arch-score-panel",
+    )
+
+    body = ui.div(
+        {"class": "historical-profile-modal"},
+        ui.div(
+            {"class": "historical-profile-hero"},
+            ui.div(source_profile["player_name"], class_="player-name"),
+            ui.div(source_profile["subtitle"], class_="player-team"),
+            ui.div(*meta_badges, class_="historical-profile-badges") if meta_badges else ui.div(),
+        ),
+        ui.div(
+            {"class": "historical-profile-grid"},
+            ui.div(
+                ui.div("Historical Summary", class_="col-title"),
+                ui.div(
+                    {"class": "bio-grid historical-profile-bio-grid"},
+                    *[bio_item(label, value, mono=mono) for label, value, mono in summary_items],
+                ),
+                class_="arch-score-panel",
+            ),
+            ui.div(
+                ui.div("Similarity Grades", class_="col-title"),
+                ui.div({"class": "historical-profile-grade-list"}, *category_rows),
+                class_="arch-score-panel",
+            ),
+        ),
+        comps_section,
+    )
+    return ui.modal(
+        body,
+        title=ui.HTML(
+            f"Player Profile <b>· {source_profile['player_name']}</b> "
+            f"<span class=\"sub\" style=\"margin-left:10px;\">historical player view</span>"
+        ),
+        easy_close=True,
+        size="xl",
+    )
 
 
 def historical_current_comps_for_player(row, n_comp: int = HISTORICAL_CURRENT_COMP_LIMIT):
@@ -3940,12 +4050,12 @@ app_ui = ui.page_fluid(
                 display:flex;
                 align-items:center;
                 gap:6px;
-                padding:9px 22px 9px 0 !important;
+                padding:11px 26px 11px 6px !important;
                 width:100% !important;
                 outline:none !important;
             }
             .historical-header-card .selectize-control.multi .selectize-input {
-                padding-right:0 !important;
+                padding-right:6px !important;
             }
             .historical-header-card .selectize-control .selectize-input.input-active,
             .historical-header-card .selectize-control .selectize-input.dropdown-active,
@@ -3964,7 +4074,7 @@ app_ui = ui.page_fluid(
                 flex-wrap:wrap !important;
                 gap:6px !important;
                 align-items:center !important;
-                padding:9px 12px !important;
+                padding:11px 6px !important;
             }
             .historical-header-card .selectize-input > .item {
                 background:rgba(73,106,164,.16) !important;
@@ -4208,6 +4318,57 @@ app_ui = ui.page_fluid(
                 text-transform:uppercase;
                 letter-spacing:.08em;
             }
+            .historical-profile-modal {
+                display:grid;
+                gap:18px;
+            }
+            .historical-profile-hero {
+                border:1px solid var(--rule);
+                background:rgba(18,26,40,.72);
+                padding:20px 22px;
+            }
+            .historical-profile-badges {
+                display:flex;
+                flex-wrap:wrap;
+                gap:8px;
+                margin-top:12px;
+            }
+            .historical-profile-grid {
+                display:grid;
+                grid-template-columns:1.35fr .9fr;
+                gap:18px;
+            }
+            .historical-profile-bio-grid {
+                grid-template-columns:repeat(4, minmax(0, 1fr));
+            }
+            .historical-profile-grade-list {
+                display:grid;
+                gap:10px;
+            }
+            .historical-profile-grade-row {
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+                gap:12px;
+                padding:10px 0;
+                border-bottom:1px solid rgba(60,79,112,.32);
+            }
+            .historical-profile-grade-row:last-child {
+                border-bottom:none;
+            }
+            .historical-profile-grade-label {
+                color:var(--ink-2);
+                font-family:var(--sans);
+                letter-spacing:.08em;
+                text-transform:uppercase;
+                font-size:11px;
+                font-weight:700;
+            }
+            .historical-profile-grade-value {
+                color:var(--ink);
+                font-family:var(--mono);
+                font-size:18px;
+            }
             @media (max-width: 1180px) {
                 .historical-filter-field,
                 .historical-filter-field--slider,
@@ -4231,6 +4392,12 @@ app_ui = ui.page_fluid(
                 .historical-filter-field--slider,
                 .historical-filter-field--sm {
                     grid-column:span 12;
+                }
+                .historical-profile-grid {
+                    grid-template-columns:1fr;
+                }
+                .historical-profile-bio-grid {
+                    grid-template-columns:repeat(2, minmax(0, 1fr));
                 }
             }
         """),
@@ -5651,8 +5818,22 @@ def server(input, output, session):
     @reactive.event(input.hist_select_row)
     def _hist_select_row():
         row_id = str(input.hist_select_row() or "").strip()
-        if row_id:
-            hist_selected.set(row_id)
+        if not row_id:
+            return
+        hist_selected.set(row_id)
+        source_row = historical_row_by_id(row_id)
+        if source_row is None:
+            return
+        ui.modal_show(make_historical_profile_modal(source_row))
+
+    @reactive.effect
+    @reactive.event(input.hist_open_current_profile)
+    def _hist_open_current_profile():
+        pid = str(input.hist_open_current_profile() or "").strip()
+        if not pid:
+            return
+        import random
+        modal_req.set((pid, random.random()))
 
     @reactive.effect
     @reactive.event(input.hist_open_compare)
