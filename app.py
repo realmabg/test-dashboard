@@ -3914,14 +3914,28 @@ app_ui = ui.page_fluid(
             .historical-header-card .shiny-input-container {
                 margin-bottom:0;
             }
-            .historical-header-card input[type="text"],
-            .historical-header-card .selectize-input {
+            .historical-header-card input[type="text"] {
                 background:rgba(10,16,27,.7) !important;
                 border:1px solid var(--rule) !important;
                 color:var(--ink) !important;
                 border-radius:0 !important;
                 min-height:44px !important;
                 box-shadow:none !important;
+            }
+            .historical-filter-field .selectize-control {
+                border:1px solid var(--rule);
+                background:rgba(10,16,27,.7);
+                min-height:44px;
+                padding:0 12px;
+            }
+            .historical-header-card .selectize-input {
+                background:transparent !important;
+                border:none !important;
+                color:var(--ink) !important;
+                border-radius:0 !important;
+                min-height:42px !important;
+                box-shadow:none !important;
+                padding:10px 0 !important;
             }
             .historical-header-card .selectize-dropdown {
                 background:#131b29;
@@ -3933,7 +3947,7 @@ app_ui = ui.page_fluid(
                 flex-wrap:wrap !important;
                 gap:6px !important;
                 align-items:center !important;
-                padding:8px 12px !important;
+                padding:10px 0 !important;
             }
             .historical-header-card .selectize-input > .item {
                 background:rgba(200,168,75,.14) !important;
@@ -3947,6 +3961,17 @@ app_ui = ui.page_fluid(
             .historical-header-card .selectize-input.items.not-full > input {
                 min-width:100% !important;
             }
+            .historical-header-card .selectize-input.items > input,
+            .historical-header-card .selectize-input.items.full > input,
+            .historical-header-card .selectize-input input::placeholder {
+                color:var(--ink-3) !important;
+                opacity:1 !important;
+            }
+            .historical-header-card .selectize-control.single .selectize-input:after,
+            .historical-header-card .selectize-control.multi .selectize-input:after {
+                border-color:var(--ink-3) transparent transparent transparent !important;
+                right:0 !important;
+            }
             .historical-header-card input[type="text"] {
                 width:100%;
                 padding:11px 14px;
@@ -3958,6 +3983,7 @@ app_ui = ui.page_fluid(
                 grid-template-columns:repeat(12, minmax(0, 1fr));
                 gap:16px;
                 margin-top:16px;
+                align-items:start;
             }
             .historical-filter-field {
                 grid-column:span 2;
@@ -3970,6 +3996,7 @@ app_ui = ui.page_fluid(
                 margin-top:18px;
                 border-top:1px solid var(--rule);
                 padding-top:14px;
+                display:block;
             }
             .historical-more-filters summary {
                 cursor:pointer;
@@ -3977,6 +4004,19 @@ app_ui = ui.page_fluid(
                 color:var(--ink);
                 font-family:var(--serif);
                 font-size:20px;
+                display:inline-flex;
+                align-items:center;
+                gap:8px;
+                padding:2px 0;
+            }
+            .historical-more-filters summary::before {
+                content:"+";
+                font-family:var(--mono);
+                font-size:16px;
+                color:var(--ink-2);
+            }
+            .historical-more-filters[open] summary::before {
+                content:"−";
             }
             .historical-more-filters summary::-webkit-details-marker {
                 display:none;
