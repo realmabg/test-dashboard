@@ -34,6 +34,15 @@ HISTORICAL_NEIGHBORS_RELATIVE_PATHS = {
         Path("historical_comps_output") / "d1_historical_neighbors_2026_prior_big_west_next_year.csv"
     ),
 }
+HISTORICAL_SCORE_RELATIVE_PATH = (
+    Path("historical_comps_output") / "d1_historical_category_scores.csv"
+)
+HISTORICAL_PLAYER_INDEX_RELATIVE_PATH = (
+    Path("historical_comps_output") / "d1_historical_player_index.csv"
+)
+HISTORICAL_TABLE_LIMIT = 25
+HISTORICAL_CURRENT_COMP_LIMIT = 5
+HISTORICAL_BETA_ARCHETYPES = ["PG / Combo", "2-4 Wing", "F/C Stretch"]
 
 
 def resolve_current_d2_schema_path():
@@ -68,6 +77,28 @@ def resolve_historical_neighbors_path(pool_key: str = "all"):
     return None
 
 
+def _resolve_optional_relative_path(relative_path: Path):
+    direct = HERE / relative_path
+    if direct.exists():
+        return direct
+    parent_direct = HERE.parent / relative_path
+    if parent_direct.exists():
+        return parent_direct
+    for base in (HERE, *HERE.parents):
+        candidate = base / relative_path
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def resolve_historical_score_path():
+    return _resolve_optional_relative_path(HISTORICAL_SCORE_RELATIVE_PATH)
+
+
+def resolve_historical_player_index_path():
+    return _resolve_optional_relative_path(HISTORICAL_PLAYER_INDEX_RELATIVE_PATH)
+
+
 
 
 def load_historical_neighbors(pool_key: str = "all"):
@@ -85,6 +116,134 @@ def load_historical_neighbors(pool_key: str = "all"):
     for col in text_cols:
         if col in df.columns:
             df[col] = df[col].fillna("").astype(str).str.strip()
+    return df
+
+
+def load_historical_scores():
+    path = resolve_historical_score_path()
+    if path is None:
+        return pd.DataFrame()
+    df = pd.read_csv(path)
+    text_cols = ["season_player_id", "player_name", "team", "conf"]
+    numeric_cols = [
+        "year",
+        "GP",
+        "mins_per_game",
+        "height_inches",
+        "3P_pct",
+        "3P_per_100_team_pos",
+        "AST_TOV",
+        "AST_pct",
+        "Blk_pct",
+        "DRB_pct",
+        "FTR",
+        "ORB_pct",
+        "Stl_pct",
+        "TOV_pct",
+        "assisted_fg_pct",
+        "personal_fouls_per_40",
+        "rim_assisted_pct",
+        "rim_pct",
+        "rim_share",
+        "stops_per_40",
+        "three_assisted_pct",
+        "three_share",
+        "usg",
+        "workload_score",
+        "shot_style_score",
+        "spacing_score",
+        "rim_finishing_score",
+        "rebounding_score",
+        "defense_score",
+        "ballhandling_score",
+        "height_score",
+        "workload_grade",
+        "shot_style_grade",
+        "spacing_grade",
+        "rim_finishing_grade",
+        "rebounding_grade",
+        "defense_grade",
+        "ballhandling_grade",
+        "height_grade",
+    ]
+    for col in text_cols:
+        if col in df.columns:
+            df[col] = df[col].fillna("").astype(str).str.strip()
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
+
+
+def load_historical_player_index():
+    path = resolve_historical_player_index_path()
+    if path is None:
+        return pd.DataFrame()
+    df = pd.read_csv(path)
+    text_cols = [
+        "season_player_id",
+        "player_name",
+        "team",
+        "conf",
+        "class",
+        "role",
+        "pos",
+        "archetype",
+        "height",
+    ]
+    numeric_cols = [
+        "year",
+        "GP",
+        "mins_per_game",
+        "pts_per_game",
+        "ast_per_game",
+        "treb_per_game",
+        "bpm",
+        "height_inches",
+        "3P_pct",
+        "3P_per_100_team_pos",
+        "AST_TOV",
+        "AST_pct",
+        "Blk_pct",
+        "DRB_pct",
+        "FTR",
+        "ORB_pct",
+        "Stl_pct",
+        "TOV_pct",
+        "assisted_fg_pct",
+        "personal_fouls_per_40",
+        "rim_assisted_pct",
+        "rim_pct",
+        "rim_share",
+        "stops_per_40",
+        "three_assisted_pct",
+        "three_share",
+        "usg",
+        "workload_score",
+        "shot_style_score",
+        "spacing_score",
+        "rim_finishing_score",
+        "rebounding_score",
+        "defense_score",
+        "ballhandling_score",
+        "height_score",
+        "workload_grade",
+        "shot_style_grade",
+        "spacing_grade",
+        "rim_finishing_grade",
+        "rebounding_grade",
+        "defense_grade",
+        "ballhandling_grade",
+        "height_grade",
+    ]
+    for col in text_cols:
+        if col in df.columns:
+            df[col] = df[col].fillna("").astype(str).str.strip()
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    if "year" in df.columns:
+        df = df[df["year"].lt(D1_CURRENT_SEASON)].copy()
     return df
 
 
@@ -106,6 +265,8 @@ HISTORICAL_NEIGHBORS = {
     "big_west_next_year": load_historical_neighbors("big_west_next_year"),
 }
 D1_CURRENT_SEASON = 2026
+HISTORICAL_SCORES = load_historical_scores()
+HISTORICAL_PLAYER_INDEX = load_historical_player_index()
 
 d2_df         = D2["df"];  d2_conferences = D2["conferences"]
 d2_league_avg = D2["league_avg"];  d2_similar_to = D2["similar_to"]
@@ -118,6 +279,31 @@ D1_TOTAL      = len(d1_df)
 d3_df         = D3["df"];  d3_conferences = D3["conferences"]
 d3_league_avg = D3["league_avg"];  d3_similar_to = D3["similar_to"]
 D3_TOTAL      = len(d3_df)
+
+
+def build_historical_current_pool():
+    if HISTORICAL_SCORES.empty:
+        return pd.DataFrame()
+    current_scores = HISTORICAL_SCORES[HISTORICAL_SCORES["year"].eq(D1_CURRENT_SEASON)].copy()
+    if current_scores.empty:
+        return pd.DataFrame()
+    current_scores["name_key"] = current_scores["player_name"].map(normalize_lookup_key)
+    current_scores["team_key"] = current_scores["team"].map(normalize_lookup_key)
+    current_scores["team_key_robust"] = current_scores["team"].map(normalize_team_lookup_key)
+
+    current_players = d1_df.copy()
+    current_players["name_key"] = current_players["name"].map(normalize_lookup_key)
+    current_players["team_key"] = current_players["team"].map(normalize_lookup_key)
+    current_players["team_key_robust"] = current_players["team"].map(normalize_team_lookup_key)
+
+    score_cols = [f"{category_key}_score" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES]
+    keep_cols = ["name_key", "team_key", "team_key_robust", *score_cols]
+    merged = current_players.merge(
+        current_scores[keep_cols],
+        on=["name_key", "team_key", "team_key_robust"],
+        how="left",
+    )
+    return merged
 
 ARCHETYPE_LABELS = {
     "score_pg_combo": "PG / Combo Guard",
@@ -972,6 +1158,167 @@ def make_explainer_page():
                ui.HTML(simple_markdown_to_html(content))))
 
 
+def historical_slider_range(column: str, step: float):
+    if HISTORICAL_PLAYER_INDEX.empty or column not in HISTORICAL_PLAYER_INDEX.columns:
+        return (0, 0)
+    vals = pd.to_numeric(HISTORICAL_PLAYER_INDEX[column], errors="coerce").dropna()
+    if vals.empty:
+        return (0, 0)
+    lo = math.floor(vals.min() / step) * step
+    hi = math.ceil(vals.max() / step) * step
+    return (float(lo), float(hi))
+
+
+def make_historical_beta_tab():
+    height_min, height_max = historical_slider_range("height_inches", 1)
+    mpg_min, mpg_max = historical_slider_range("mins_per_game", 0.5)
+    bpm_min, bpm_max = historical_slider_range("bpm", 0.1)
+    gp_min, gp_max = historical_slider_range("GP", 1)
+    return ui.div(
+        {"id": "hist-tab", "class": "tab-panel"},
+        ui.div(
+            {"class": "historical-shell"},
+            ui.div(
+                {"class": "historical-header-card"},
+                ui.div("Historical Players", class_="historical-title"),
+                ui.div("Search player", class_="historical-search-label"),
+                ui.input_text("hist_q", None, placeholder="Search a past player..."),
+                ui.div(
+                    {"class": "historical-filter-row"},
+                    ui.div(
+                        {"class": "historical-filter-field"},
+                        ui.div("Season", class_="historical-filter-title"),
+                        ui.input_selectize(
+                            "hist_season",
+                            None,
+                            choices={"": "All seasons", **{str(year): str(year) for year in HISTORICAL_FILTER_YEARS}},
+                            selected=str(HISTORICAL_FILTER_YEARS[0]) if HISTORICAL_FILTER_YEARS else "",
+                            options={"placeholder": "Any season"},
+                        ),
+                    ),
+                    ui.div(
+                        {"class": "historical-filter-field"},
+                        ui.div("Conference", class_="historical-filter-title"),
+                        ui.input_selectize(
+                            "hist_conf",
+                            None,
+                            choices={"": "All conferences", **{conf: conf for conf in HISTORICAL_FILTER_CONFS}},
+                            selected="",
+                            options={"placeholder": "Any conference"},
+                        ),
+                    ),
+                    ui.div(
+                        {"class": "historical-filter-field"},
+                        ui.div("Team", class_="historical-filter-title"),
+                        ui.input_selectize(
+                            "hist_team",
+                            None,
+                            choices={"": "All teams", **{team: team for team in HISTORICAL_FILTER_TEAMS}},
+                            selected="",
+                            options={"placeholder": "Any team"},
+                        ),
+                    ),
+                    ui.div(
+                        {"class": "historical-filter-field historical-filter-field--sm"},
+                        ui.div("Pos", class_="historical-filter-title"),
+                        ui.input_selectize(
+                            "hist_pos",
+                            None,
+                            choices={"": "All positions", **{pos: pos for pos in POSITIONS}},
+                            selected="",
+                            options={"placeholder": "Any position"},
+                        ),
+                    ),
+                    ui.div(
+                        {"class": "historical-filter-field"},
+                        ui.div("Archetype", class_="historical-filter-title"),
+                        ui.input_selectize(
+                            "hist_archetype",
+                            None,
+                            choices={"": "All archetypes", **{arch: arch for arch in HISTORICAL_BETA_ARCHETYPES}},
+                            selected="",
+                            options={"placeholder": "Any archetype"},
+                        ),
+                    ),
+                    ui.div(
+                        {"class": "historical-filter-field historical-filter-field--slider"},
+                        ui.div("Height range", class_="historical-filter-title"),
+                        ui.input_slider(
+                            "hist_height",
+                            None,
+                            min=int(height_min),
+                            max=int(height_max),
+                            value=[int(height_min), int(height_max)],
+                            step=1,
+                        ),
+                    ),
+                    ui.div(
+                        {"class": "historical-filter-field historical-filter-field--slider"},
+                        ui.div("Minutes minimum", class_="historical-filter-title"),
+                        ui.input_slider(
+                            "hist_mpg_min",
+                            None,
+                            min=float(mpg_min),
+                            max=float(mpg_max),
+                            value=max(5.0, float(mpg_min)),
+                            step=0.5,
+                        ),
+                    ),
+                ),
+                ui.tags.details(
+                    {"class": "historical-more-filters"},
+                    ui.tags.summary("Additional filters"),
+                    ui.div(
+                        {"class": "historical-filter-row historical-filter-row--additional"},
+                        ui.div(
+                            {"class": "historical-filter-field"},
+                            ui.div("Class", class_="historical-filter-title"),
+                            ui.input_checkbox_group(
+                                "hist_class",
+                                None,
+                                choices={cls: cls for cls in CLASSES},
+                                selected=[],
+                                inline=True,
+                            ),
+                        ),
+                        ui.div(
+                            {"class": "historical-filter-field historical-filter-field--slider"},
+                            ui.div("BPM minimum", class_="historical-filter-title"),
+                            ui.input_slider(
+                                "hist_bpm_min",
+                                None,
+                                min=float(bpm_min),
+                                max=float(bpm_max),
+                                value=float(bpm_min),
+                                step=0.1,
+                            ),
+                        ),
+                        ui.div(
+                            {"class": "historical-filter-field historical-filter-field--slider"},
+                            ui.div("Games minimum", class_="historical-filter-title"),
+                            ui.input_slider(
+                                "hist_gp_min",
+                                None,
+                                min=int(gp_min),
+                                max=int(gp_max),
+                                value=max(1, int(gp_min)),
+                                step=1,
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            ui.div(
+                {"class": "historical-results-head"},
+                ui.output_text("hist_results_count"),
+                ui.div("Click a row to load current-player comps.", class_="historical-results-note"),
+            ),
+            ui.output_ui("historical_table_ui"),
+            ui.output_ui("historical_current_comps_ui"),
+        ),
+    )
+
+
 SIMILARITY_METRIC_LABELS = {
     "mahalanobis": "Mahalanobis dist. over PC1-PC4",
     "euclidean": "Euclidean dist. over PC1-PC4",
@@ -1056,6 +1403,12 @@ CURRENT_TO_COMPARE_KEY = {
     "AST_TOV": "ast_tov",
     "TOV_pct": "tov_pct",
 }
+HISTORICAL_COMPARE_SCORE_COLUMNS = [
+    f"{category_key}_score" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES
+]
+HISTORICAL_COMPARE_GRADE_COLUMNS = [
+    f"{category_key}_grade" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES
+]
 
 
 def _current_compare_profile_from_row(row):
@@ -1077,6 +1430,30 @@ def _current_compare_profile_from_row(row):
     return profile
 
 
+HISTORICAL_CURRENT_POOL = build_historical_current_pool()
+HISTORICAL_FILTER_YEARS = (
+    sorted(
+        [
+            int(year)
+            for year in pd.to_numeric(HISTORICAL_PLAYER_INDEX.get("year"), errors="coerce").dropna().unique()
+        ],
+        reverse=True,
+    )
+    if not HISTORICAL_PLAYER_INDEX.empty
+    else []
+)
+HISTORICAL_FILTER_CONFS = (
+    sorted([conf for conf in HISTORICAL_PLAYER_INDEX.get("conf", pd.Series(dtype="object")).dropna().unique() if str(conf).strip()])
+    if not HISTORICAL_PLAYER_INDEX.empty
+    else []
+)
+HISTORICAL_FILTER_TEAMS = (
+    sorted([team for team in HISTORICAL_PLAYER_INDEX.get("team", pd.Series(dtype="object")).dropna().unique() if str(team).strip()])
+    if not HISTORICAL_PLAYER_INDEX.empty
+    else []
+)
+
+
 def _profile_from_neighbor_payload(payload, prefix: str, player_id: str = "", subtitle: str = "", year: int | None = None):
     profile = {
         "player_name": str(payload.get(f"{prefix}_name", "")).strip(),
@@ -1094,6 +1471,81 @@ def _profile_from_neighbor_payload(payload, prefix: str, player_id: str = "", su
             key = f"{prefix}_{stat_key}"
             profile[stat_key] = _as_float(payload.get(key))
     return profile
+
+
+def format_season_short(year: object) -> str:
+    num = _as_float(year)
+    if not np.isfinite(num):
+        return ""
+    return f"'{int(round(num)) % 100:02d}"
+
+
+def historical_profile_subtitle(row) -> str:
+    bits = [
+        str(row.get("team", "") or "").strip(),
+        format_season_short(row.get("year")),
+        str(row.get("conf", "") or "").strip(),
+    ]
+    return " \u00b7 ".join([bit for bit in bits if bit])
+
+
+def historical_compare_profile_from_row(row):
+    profile = {
+        "player_name": str(row.get("player_name", "") or "").strip(),
+        "team": str(row.get("team", "") or "").strip(),
+        "conf": str(row.get("conf", "") or "").strip(),
+        "year": _as_float(row.get("year")),
+        "player_id": "",
+        "subtitle": historical_profile_subtitle(row),
+        "height_inches": _as_float(row.get("height_inches")),
+    }
+    for stat_key, _row_key in CURRENT_TO_COMPARE_KEY.items():
+        profile[stat_key] = _as_float(row.get(stat_key))
+    for grade_key in HISTORICAL_COMPARE_GRADE_COLUMNS:
+        profile[grade_key] = _as_float(row.get(grade_key))
+    return profile
+
+
+def historical_current_comps_for_player(row, n_comp: int = HISTORICAL_CURRENT_COMP_LIMIT):
+    if HISTORICAL_CURRENT_POOL.empty:
+        return []
+    row_scores = np.array([_as_float(row.get(col)) for col in HISTORICAL_COMPARE_SCORE_COLUMNS], dtype=float)
+    if not np.isfinite(row_scores).all():
+        return []
+    pool = HISTORICAL_CURRENT_POOL.copy()
+    pool = pool.dropna(subset=HISTORICAL_COMPARE_SCORE_COLUMNS).copy()
+    if pool.empty:
+        return []
+    pool_scores = pool[HISTORICAL_COMPARE_SCORE_COLUMNS].to_numpy(dtype=float)
+    dists = np.sqrt(((pool_scores - row_scores) ** 2).sum(axis=1))
+    pool["historical_distance"] = dists
+    source_name_key = normalize_lookup_key(row.get("player_name"))
+    source_team_key = normalize_lookup_key(row.get("team"))
+    pool = pool[
+        ~(
+            pool["name"].map(normalize_lookup_key).eq(source_name_key)
+            & pool["team"].map(normalize_lookup_key).eq(source_team_key)
+        )
+    ].copy()
+    pool = pool.sort_values(["historical_distance", "mpg"], ascending=[True, False]).head(n_comp)
+    comps = []
+    for idx, comp in pool.iterrows():
+        comps.append(
+            {
+                "rank": len(comps) + 1,
+                "player_id": comp["id"],
+                "name": comp["name"],
+                "team": comp["team"],
+                "conf": comp.get("confName", comp.get("conf", "")),
+                "cls": comp.get("cls", ""),
+                "pos": comp.get("pos", ""),
+                "archetype": archetype_label(comp.get("primary_archetype", "")),
+                "distance": float(comp["historical_distance"]),
+                "subtitle": f"{comp['team']} \u00b7 {comp.get('cls', '')}".strip(),
+                "profile": _current_compare_profile_from_row(comp),
+            }
+        )
+    return comps
 
 
 def _current_d1_compare_profile(row):
@@ -1181,8 +1633,10 @@ def make_similarity_compare_modal(
             )
         )
 
-    footer_buttons = [
-        ui.tags.button(
+    footer_buttons = []
+    if source_profile.get("player_id"):
+        footer_buttons.append(
+            ui.tags.button(
                 {
                     "class": "pill-btn active",
                     "onclick": (
@@ -1192,7 +1646,7 @@ def make_similarity_compare_modal(
                 },
                 "Back to player",
             )
-    ]
+        )
     if target_profile.get("player_id"):
         footer_buttons.append(
             ui.tags.button(
@@ -2801,6 +3255,7 @@ app_ui = ui.page_fluid(
             .tab-btn.active-info { color:var(--ink);    border-bottom-color:var(--ink); }
             .tab-btn.active-wl { color:#7cc47a;         border-bottom-color:#7cc47a; }
             .tab-btn.active-ucsd { color:#8a5f0e;       border-bottom-color:#8a5f0e; }
+            .tab-btn.active-hist { color:#c9d6f0;       border-bottom-color:#c9d6f0; }
             .tab-sep { width:1px; height:16px; background:var(--rule-2); margin:0 4px; }
 
             /* watchlist badge on tab button */
@@ -3380,6 +3835,282 @@ app_ui = ui.page_fluid(
                 padding:2px 7px; margin-left:6px;
                 background:var(--bg-2); color:var(--ink-2); vertical-align:middle;
             }
+
+            /* ── Historical beta tab ── */
+            .historical-shell {
+                padding:26px 28px 34px;
+                display:flex;
+                flex-direction:column;
+                gap:18px;
+            }
+            .historical-header-card,
+            .historical-table-card,
+            .historical-comps-card {
+                border:1px solid var(--rule);
+                background:rgba(19,27,41,.72);
+            }
+            .historical-header-card {
+                padding:24px 24px 18px;
+            }
+            .historical-title {
+                font-family:var(--serif);
+                font-size:48px;
+                line-height:1;
+                color:var(--ink);
+                margin-bottom:22px;
+            }
+            .historical-search-label,
+            .historical-filter-title,
+            .historical-results-head,
+            .historical-table th {
+                font-family:var(--sans);
+                text-transform:uppercase;
+                letter-spacing:.10em;
+            }
+            .historical-search-label,
+            .historical-filter-title {
+                color:var(--ink-2);
+                font-size:11px;
+                font-weight:700;
+                margin-bottom:8px;
+            }
+            .historical-header-card .shiny-input-container {
+                margin-bottom:0;
+            }
+            .historical-header-card input[type="text"],
+            .historical-header-card .selectize-input {
+                background:rgba(10,16,27,.7) !important;
+                border:1px solid var(--rule) !important;
+                color:var(--ink) !important;
+                border-radius:0 !important;
+                min-height:44px !important;
+                box-shadow:none !important;
+            }
+            .historical-header-card .selectize-dropdown {
+                background:#131b29;
+                border-color:var(--rule);
+                color:var(--ink);
+            }
+            .historical-header-card input[type="text"] {
+                width:100%;
+                padding:11px 14px;
+                font-family:var(--sans);
+                font-size:16px;
+            }
+            .historical-filter-row {
+                display:grid;
+                grid-template-columns:repeat(12, minmax(0, 1fr));
+                gap:16px;
+                margin-top:16px;
+            }
+            .historical-filter-field {
+                grid-column:span 2;
+                min-width:0;
+            }
+            .historical-filter-field--sm {
+                grid-column:span 1;
+            }
+            .historical-filter-field--slider {
+                grid-column:span 3;
+            }
+            .historical-more-filters {
+                margin-top:18px;
+                border-top:1px solid var(--rule);
+                padding-top:14px;
+            }
+            .historical-more-filters summary {
+                cursor:pointer;
+                list-style:none;
+                color:var(--ink);
+                font-family:var(--serif);
+                font-size:20px;
+            }
+            .historical-more-filters summary::-webkit-details-marker {
+                display:none;
+            }
+            .historical-filter-row--additional {
+                margin-top:14px;
+            }
+            .historical-filter-row--additional .shiny-options-group {
+                display:flex;
+                flex-wrap:wrap;
+                gap:10px 14px;
+            }
+            .historical-filter-row--additional .checkbox label {
+                color:var(--ink-2);
+                font-family:var(--mono);
+                font-size:11px;
+            }
+            .historical-results-head {
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+                gap:16px;
+                color:var(--ink-2);
+                font-size:11px;
+                font-weight:700;
+            }
+            .historical-results-note {
+                color:var(--ink-3);
+                font-family:var(--sans);
+                font-size:12px;
+                text-transform:none;
+                letter-spacing:0;
+            }
+            .historical-table-card {
+                overflow:auto;
+            }
+            .historical-table {
+                width:100%;
+                border-collapse:collapse;
+                min-width:1120px;
+            }
+            .historical-table th,
+            .historical-table td {
+                padding:14px 16px;
+                border-bottom:1px solid rgba(89,113,154,.18);
+                text-align:left;
+                vertical-align:middle;
+            }
+            .historical-table th {
+                font-size:11px;
+                font-weight:700;
+                color:var(--ink-2);
+                background:rgba(14,20,33,.94);
+                position:sticky;
+                top:0;
+                z-index:1;
+            }
+            .historical-table th button {
+                background:none;
+                border:none;
+                color:inherit;
+                font:inherit;
+                letter-spacing:inherit;
+                text-transform:inherit;
+                cursor:pointer;
+                padding:0;
+            }
+            .historical-table tbody tr {
+                cursor:pointer;
+                transition:background .14s ease;
+            }
+            .historical-table tbody tr:hover {
+                background:rgba(73,106,164,.12);
+            }
+            .historical-table tbody tr.is-selected {
+                background:rgba(200,168,75,.12);
+            }
+            .historical-table-player {
+                font-family:var(--serif);
+                font-size:18px;
+                color:var(--ink);
+            }
+            .historical-table-meta {
+                margin-top:4px;
+                color:var(--ink-3);
+                font-family:var(--mono);
+                font-size:11px;
+            }
+            .historical-empty {
+                padding:22px 24px;
+                color:var(--ink-3);
+                border:1px solid var(--rule);
+                background:rgba(19,27,41,.72);
+            }
+            .historical-comps-card {
+                padding:22px 24px;
+            }
+            .historical-comps-head {
+                display:flex;
+                justify-content:space-between;
+                align-items:flex-end;
+                gap:16px;
+                padding-bottom:12px;
+                border-bottom:1px solid var(--rule);
+                margin-bottom:14px;
+            }
+            .historical-comps-title {
+                color:var(--ink);
+                font-family:var(--serif);
+                font-size:30px;
+                line-height:1;
+            }
+            .historical-comps-subtitle {
+                color:var(--ink-3);
+                font-family:var(--sans);
+                font-size:13px;
+            }
+            .historical-comp-list {
+                display:grid;
+                grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));
+                gap:12px;
+            }
+            .historical-comp-card {
+                border:1px solid var(--rule);
+                background:rgba(16,23,37,.8);
+                padding:14px;
+                cursor:pointer;
+                transition:border-color .14s ease, transform .14s ease;
+            }
+            .historical-comp-card:hover {
+                border-color:var(--ink-2);
+                transform:translateY(-1px);
+            }
+            .historical-comp-rank {
+                color:var(--ink-3);
+                font-family:var(--mono);
+                font-size:11px;
+                margin-bottom:8px;
+            }
+            .historical-comp-name {
+                color:var(--ink);
+                font-family:var(--serif);
+                font-size:24px;
+                line-height:1.05;
+            }
+            .historical-comp-meta {
+                display:flex;
+                flex-wrap:wrap;
+                gap:8px;
+                margin-top:8px;
+                color:var(--ink-3);
+                font-family:var(--sans);
+                font-size:13px;
+            }
+            .historical-comp-distance {
+                margin-top:14px;
+                color:var(--ink-2);
+                font-family:var(--mono);
+                font-size:11px;
+                text-transform:uppercase;
+                letter-spacing:.08em;
+            }
+            @media (max-width: 1180px) {
+                .historical-filter-field,
+                .historical-filter-field--slider,
+                .historical-filter-field--sm {
+                    grid-column:span 6;
+                }
+            }
+            @media (max-width: 760px) {
+                .historical-shell {
+                    padding:18px 16px 24px;
+                }
+                .historical-title {
+                    font-size:34px;
+                }
+                .historical-results-head,
+                .historical-comps-head {
+                    flex-direction:column;
+                    align-items:flex-start;
+                }
+                .historical-filter-field,
+                .historical-filter-field--slider,
+                .historical-filter-field--sm {
+                    grid-column:span 12;
+                }
+            }
         """),
         ui.tags.script("""
             var scatterConfigs = {
@@ -3501,7 +4232,7 @@ app_ui = ui.page_fluid(
                     p.classList.remove('active');
                 });
                 document.querySelectorAll('.tab-btn').forEach(function(b) {
-                    b.classList.remove('active-d1','active-d2','active-d3','active-info','active-wl','active-ucsd');
+                    b.classList.remove('active-d1','active-d2','active-d3','active-info','active-wl','active-ucsd','active-hist');
                 });
                 document.getElementById(tab+'-tab').classList.add('active');
                 document.getElementById('btn-'+tab).classList.add('active-'+tab);
@@ -3569,6 +4300,9 @@ app_ui = ui.page_fluid(
                ui.tags.button("Division III", id="btn-d3", class_="tab-btn",
                               onclick="switchTab('d3')"),
                ui.div({"class": "tab-sep"}),
+               ui.tags.button("Historical Players (beta)", id="btn-hist", class_="tab-btn",
+                              onclick="switchTab('hist')"),
+               ui.div({"class": "tab-sep"}),
                ui.tags.button("Archetype Guide", id="btn-info", class_="tab-btn",
                               onclick="switchTab('info')"),
                ui.div({"class": "tab-sep"}),
@@ -3596,6 +4330,8 @@ app_ui = ui.page_fluid(
                    ui.div({"class": "body-grid"},
                           make_sidebar("d3", d3_df, d3_conferences),
                           make_plot_area("d3"))),
+
+            make_historical_beta_tab(),
 
             ui.div({"id": "info-tab", "class": "tab-panel"},
                    make_explainer_page()),
@@ -3655,6 +4391,9 @@ def server(input, output, session):
     modal_similarity_view = reactive.Value("current")
     modal_similarity_pool = reactive.Value("all")
     compare_req = reactive.Value(None)
+    hist_selected = reactive.Value(None)
+    hist_sort_col = reactive.Value("bpm")
+    hist_sort_dir = reactive.Value("desc")
 
     d1_fig = go.FigureWidget()
     d2_fig = go.FigureWidget()
@@ -3690,6 +4429,81 @@ def server(input, output, session):
         ):
             return (default_lo, default_hi)
         return (cur_lo, cur_hi)
+
+    def historical_row_by_id(season_player_id):
+        if not season_player_id or HISTORICAL_PLAYER_INDEX.empty:
+            return None
+        rows = HISTORICAL_PLAYER_INDEX[
+            HISTORICAL_PLAYER_INDEX["season_player_id"].eq(str(season_player_id).strip())
+        ]
+        if rows.empty:
+            return None
+        return rows.iloc[0]
+
+    @reactive.calc
+    def hist_filtered():
+        d = HISTORICAL_PLAYER_INDEX.copy()
+        if d.empty:
+            return d
+        q = (input.hist_q() or "").strip().lower()
+        if q:
+            d = d[d["player_name"].str.lower().str.contains(q, na=False)]
+        season = str(input.hist_season() or "").strip()
+        if season:
+            d = d[d["year"].eq(pd.to_numeric(season, errors="coerce"))]
+        conf = str(input.hist_conf() or "").strip()
+        if conf:
+            d = d[d["conf"].eq(conf)]
+        team = str(input.hist_team() or "").strip()
+        if team:
+            d = d[d["team"].eq(team)]
+        pos = str(input.hist_pos() or "").strip()
+        if pos:
+            d = d[d["pos"].eq(pos)]
+        archetype = str(input.hist_archetype() or "").strip()
+        if archetype:
+            d = d[d["archetype"].eq(archetype)]
+        classes = list(input.hist_class() or [])
+        if classes:
+            d = d[d["class"].isin(classes)]
+        lo, hi = safe_range_input(input.hist_height(), HISTORICAL_PLAYER_INDEX, "height_inches", 1)
+        d = d[d["height_inches"].between(lo, hi, inclusive="both")]
+        mpg_min = pd.to_numeric(pd.Series([input.hist_mpg_min()]), errors="coerce").iloc[0]
+        if pd.notna(mpg_min):
+            d = d[d["mins_per_game"].ge(float(mpg_min))]
+        bpm_min = pd.to_numeric(pd.Series([input.hist_bpm_min()]), errors="coerce").iloc[0]
+        if pd.notna(bpm_min):
+            d = d[d["bpm"].ge(float(bpm_min))]
+        gp_min = pd.to_numeric(pd.Series([input.hist_gp_min()]), errors="coerce").iloc[0]
+        if pd.notna(gp_min):
+            d = d[d["GP"].ge(float(gp_min))]
+        sort_col = hist_sort_col.get()
+        sort_dir = hist_sort_dir.get()
+        ascending = sort_dir == "asc"
+        if sort_col == "player_name":
+            d = d.sort_values(["player_name", "year", "mins_per_game"], ascending=[ascending, False, False], na_position="last")
+        else:
+            d = d.sort_values([sort_col, "mins_per_game", "player_name"], ascending=[ascending, False, True], na_position="last")
+        return d
+
+    @reactive.calc
+    def hist_display_rows():
+        d = hist_filtered()
+        if d.empty:
+            return d
+        return d.head(HISTORICAL_TABLE_LIMIT).copy()
+
+    @reactive.effect
+    def _hist_keep_selection_fresh():
+        rows = hist_display_rows()
+        selected = hist_selected.get()
+        if rows.empty:
+            if selected is not None:
+                hist_selected.set(None)
+            return
+        row_ids = set(rows["season_player_id"].astype(str))
+        if selected not in row_ids:
+            hist_selected.set(str(rows.iloc[0]["season_player_id"]))
 
     def d1_home_view_active():
         q = (input.d1_q() or "").strip()
@@ -4085,7 +4899,6 @@ def server(input, output, session):
         if not pid:
             return
         import random
-        ui.modal_remove()
         modal_req.set((pid, random.random()))
 
     @reactive.effect
@@ -4095,7 +4908,6 @@ def server(input, output, session):
         if not pid:
             return
         import random
-        ui.modal_remove()
         modal_req.set((pid, random.random()))
 
     # ── Open modal from watchlist card ────────────────────────────────────
@@ -4632,6 +5444,186 @@ def server(input, output, session):
     @render.ui
     def d3_modal_trigger():
         return ui.div()
+
+    @reactive.effect
+    @reactive.event(input.hist_sort_click)
+    def _hist_sort_click():
+        col = str(input.hist_sort_click() or "").strip()
+        valid = {
+            "player_name",
+            "year",
+            "conf",
+            "team",
+            "pos",
+            "archetype",
+            "mins_per_game",
+            "pts_per_game",
+            "ast_per_game",
+            "treb_per_game",
+            "bpm",
+        }
+        if col not in valid:
+            return
+        if hist_sort_col.get() == col:
+            hist_sort_dir.set("asc" if hist_sort_dir.get() == "desc" else "desc")
+        else:
+            hist_sort_col.set(col)
+            hist_sort_dir.set("asc" if col == "player_name" else "desc")
+
+    @reactive.effect
+    @reactive.event(input.hist_select_row)
+    def _hist_select_row():
+        row_id = str(input.hist_select_row() or "").strip()
+        if row_id:
+            hist_selected.set(row_id)
+
+    @reactive.effect
+    @reactive.event(input.hist_open_compare)
+    def _hist_open_compare():
+        payload = input.hist_open_compare() or {}
+        if not isinstance(payload, dict):
+            return
+        source_id = str(payload.get("source_id", "") or "").strip()
+        target_id = str(payload.get("target_id", "") or "").strip()
+        source_row = historical_row_by_id(source_id)
+        if source_row is None or not target_id:
+            return
+        target_rows = d1_df[d1_df["id"].eq(target_id)]
+        if target_rows.empty:
+            return
+        source_profile = historical_compare_profile_from_row(source_row)
+        target_profile = _current_compare_profile_from_row(target_rows.iloc[0])
+        compare_req.set(payload)
+        ui.modal_show(
+            make_similarity_compare_modal(
+                source_profile,
+                target_profile,
+                "historical",
+            )
+        )
+
+    @output
+    @render.text
+    def hist_results_count():
+        total = len(hist_filtered())
+        shown = len(hist_display_rows())
+        return f"{shown} of {total} matching players"
+
+    @output
+    @render.ui
+    def historical_table_ui():
+        rows = hist_display_rows()
+        if rows.empty:
+            return ui.div("No historical players match those filters.", class_="historical-empty")
+
+        selected = str(hist_selected.get() or "")
+        sort_col = hist_sort_col.get()
+        sort_dir = hist_sort_dir.get()
+
+        def sort_label(label, col):
+            marker = ""
+            if sort_col == col:
+                marker = " ↓" if sort_dir == "desc" else " ↑"
+            return ui.tags.button(
+                f"{label}{marker}",
+                onclick=f"Shiny.setInputValue('hist_sort_click','{col}',{{priority:'event'}})",
+            )
+
+        body_rows = []
+        for _, row in rows.iterrows():
+            row_id = str(row["season_player_id"])
+            selected_cls = " is-selected" if row_id == selected else ""
+            name_meta = " · ".join([bit for bit in [str(row.get("class", "")).strip(), str(row.get("role", "")).strip()] if bit])
+            body_rows.append(
+                ui.tags.tr(
+                    {
+                        "class": f"historical-row{selected_cls}",
+                        "onclick": f"Shiny.setInputValue('hist_select_row',{json.dumps(row_id)},{{priority:'event'}})",
+                    },
+                    ui.tags.td(
+                        ui.div(str(row["player_name"]), class_="historical-table-player"),
+                        ui.div(name_meta, class_="historical-table-meta") if name_meta else ui.div(),
+                    ),
+                    ui.tags.td(str(int(row["year"])) if pd.notna(row["year"]) else "\u2014"),
+                    ui.tags.td(str(row.get("conf", "") or "\u2014")),
+                    ui.tags.td(str(row.get("team", "") or "\u2014")),
+                    ui.tags.td(str(row.get("pos", "") or "\u2014")),
+                    ui.tags.td(str(row.get("archetype", "") or "\u2014")),
+                    ui.tags.td(_format_compare_value("height_inches", row.get("height_inches"))),
+                    ui.tags.td(f"{_as_float(row.get('mins_per_game')):.1f}" if pd.notna(_as_float(row.get("mins_per_game"))) else "\u2014"),
+                    ui.tags.td(f"{_as_float(row.get('pts_per_game')):.1f}" if pd.notna(_as_float(row.get("pts_per_game"))) else "\u2014"),
+                    ui.tags.td(f"{_as_float(row.get('ast_per_game')):.1f}" if pd.notna(_as_float(row.get("ast_per_game"))) else "\u2014"),
+                    ui.tags.td(f"{_as_float(row.get('treb_per_game')):.1f}" if pd.notna(_as_float(row.get("treb_per_game"))) else "\u2014"),
+                    ui.tags.td(f"{_as_float(row.get('bpm')):.1f}" if pd.notna(_as_float(row.get("bpm"))) else "\u2014"),
+                )
+            )
+
+        return ui.div(
+            {"class": "historical-table-card"},
+            ui.tags.table(
+                {"class": "historical-table"},
+                ui.tags.thead(
+                    ui.tags.tr(
+                        ui.tags.th(sort_label("Name", "player_name")),
+                        ui.tags.th(sort_label("Year", "year")),
+                        ui.tags.th(sort_label("Conference", "conf")),
+                        ui.tags.th(sort_label("Team", "team")),
+                        ui.tags.th(sort_label("Pos", "pos")),
+                        ui.tags.th(sort_label("Archetype", "archetype")),
+                        ui.tags.th("Height"),
+                        ui.tags.th(sort_label("MPG", "mins_per_game")),
+                        ui.tags.th(sort_label("PPG", "pts_per_game")),
+                        ui.tags.th(sort_label("APG", "ast_per_game")),
+                        ui.tags.th(sort_label("RPG", "treb_per_game")),
+                        ui.tags.th(sort_label("BPM", "bpm")),
+                    )
+                ),
+                ui.tags.tbody(*body_rows),
+            ),
+        )
+
+    @output
+    @render.ui
+    def historical_current_comps_ui():
+        row_id = str(hist_selected.get() or "").strip()
+        source_row = historical_row_by_id(row_id)
+        if source_row is None:
+            return ui.div("Choose a historical player to load current-player comps.", class_="historical-empty")
+        comps = historical_current_comps_for_player(source_row)
+        if not comps:
+            return ui.div("No current-player comps are available for that historical profile yet.", class_="historical-empty")
+
+        cards = []
+        for comp in comps:
+            payload = json.dumps({"source_id": row_id, "target_id": comp["player_id"]})
+            badge_color = ARCHETYPE_COLOR.get(comp["profile"].get("primary_archetype", ""), POS_COLOR.get(comp.get("pos", ""), "#888"))
+            cards.append(
+                ui.div(
+                    {
+                        "class": "historical-comp-card",
+                        "onclick": f"Shiny.setInputValue('hist_open_compare',{payload},{{priority:'event'}})",
+                    },
+                    ui.div(f"{comp['rank']:02d}", class_="historical-comp-rank"),
+                    ui.div(comp["name"], class_="historical-comp-name"),
+                    ui.div(
+                        ui.span(comp.get("archetype", ""), class_="pos-badge", style=f"color:{badge_color};border-color:{badge_color}") if comp.get("archetype") else ui.span(),
+                        ui.span(comp["team"]),
+                        ui.span(f"\u00b7 {comp.get('cls', '')}") if comp.get("cls") else ui.span(),
+                        class_="historical-comp-meta",
+                    ),
+                    ui.div(f"distance {comp['distance']:.2f}", class_="historical-comp-distance"),
+                )
+            )
+
+        return ui.div(
+            {"class": "historical-comps-card"},
+            ui.div(
+                {"class": "historical-comps-head"},
+                ui.div("Current players most like this profile", class_="historical-comps-title"),
+                ui.div(historical_profile_subtitle(source_row), class_="historical-comps-subtitle"),
+            ),
+            ui.div({"class": "historical-comp-list"}, *cards),
+        )
 
     # ═══════════════════════════════════════════════════════════════════════
     # WATCHLIST
