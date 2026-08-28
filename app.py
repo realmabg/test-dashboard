@@ -43,6 +43,7 @@ HISTORICAL_PLAYER_INDEX_RELATIVE_PATH = (
 HISTORICAL_TABLE_LIMIT = 25
 HISTORICAL_CURRENT_COMP_LIMIT = 5
 HISTORICAL_BETA_ARCHETYPES = ["PG / Combo", "2-4 Wing", "F/C Stretch"]
+LIVE_BUILD_STAMP = "TEST BUILD 08-28-2026 · 05deefa"
 
 
 def resolve_current_d2_schema_path():
@@ -3459,6 +3460,14 @@ app_ui = ui.page_fluid(
             .tab-btn.active-ucsd { color:#8a5f0e;       border-bottom-color:#8a5f0e; }
             .tab-btn.active-hist { color:#c9d6f0;       border-bottom-color:#c9d6f0; }
             .tab-sep { width:1px; height:16px; background:var(--rule-2); margin:0 4px; }
+            .build-stamp {
+                display:inline-flex; align-items:center; width:fit-content;
+                margin-top:10px; padding:6px 10px;
+                border:1px solid #8a5f0e; border-radius:999px;
+                color:#f0cb67; background:rgba(138,95,14,.12);
+                font-family:var(--mono); font-size:10px; font-weight:700;
+                letter-spacing:.12em; text-transform:uppercase;
+            }
 
             /* watchlist badge on tab button */
             .wl-badge {
@@ -4686,7 +4695,8 @@ app_ui = ui.page_fluid(
             ui.div({"class": "mast-left"},
                    ui.div(ui.HTML('NCAA Men\'s Basketball <span class="dot"></span> 2025–26'),
                           class_="kicker"),
-                   ui.div(ui.HTML("Player <em>Dashboard</em>"), class_="atlas-title")),
+                   ui.div(ui.HTML("Player <em>Dashboard</em>"), class_="atlas-title"),
+                   ui.div(LIVE_BUILD_STAMP, class_="build-stamp")),
             ui.div({"class": "mast-meta"},
                    ui.div(ui.div(str(D1_TOTAL),                class_="mast-stat-num"),
                           ui.div("D-I Players",                class_="mast-stat-lbl"), class_="mast-stat"),
