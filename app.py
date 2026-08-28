@@ -1263,7 +1263,7 @@ def make_historical_beta_tab():
                     ui.div(
                         {"class": "historical-filter-field historical-filter-field--slider"},
                         ui.div("Height range", class_="historical-filter-title"),
-                        ui.output_text("hist_height_range_label"),
+                        ui.div(ui.output_text("hist_height_range_label"), class_="historical-slider-value"),
                         ui.input_slider(
                             "hist_height",
                             None,
@@ -3922,20 +3922,31 @@ app_ui = ui.page_fluid(
                 min-height:44px !important;
                 box-shadow:none !important;
             }
-            .historical-filter-field .selectize-control {
-                border:1px solid var(--rule);
-                background:rgba(10,16,27,.7);
-                min-height:44px;
-                padding:0 12px;
-            }
-            .historical-header-card .selectize-input {
-                background:transparent !important;
+            .historical-header-card .selectize-control {
+                margin-bottom:0;
+                padding:0 !important;
                 border:none !important;
+                background:transparent !important;
+                box-shadow:none !important;
+            }
+            .historical-header-card .selectize-control .selectize-input {
+                background:rgba(10,16,27,.7) !important;
+                border:1px solid var(--rule) !important;
                 color:var(--ink) !important;
                 border-radius:0 !important;
-                min-height:42px !important;
+                min-height:44px !important;
                 box-shadow:none !important;
-                padding:10px 0 !important;
+                display:flex;
+                align-items:center;
+                gap:6px;
+                padding:9px 34px 9px 12px !important;
+            }
+            .historical-header-card .selectize-control.multi .selectize-input {
+                padding-right:12px !important;
+            }
+            .historical-header-card .selectize-control .selectize-input.input-active,
+            .historical-header-card .selectize-control .selectize-input.dropdown-active {
+                background:rgba(10,16,27,.7) !important;
             }
             .historical-header-card .selectize-dropdown {
                 background:#131b29;
@@ -3947,19 +3958,23 @@ app_ui = ui.page_fluid(
                 flex-wrap:wrap !important;
                 gap:6px !important;
                 align-items:center !important;
-                padding:10px 0 !important;
+                padding:9px 12px !important;
             }
             .historical-header-card .selectize-input > .item {
-                background:rgba(200,168,75,.14) !important;
+                background:rgba(73,106,164,.16) !important;
                 color:var(--ink) !important;
-                border:1px solid rgba(200,168,75,.35) !important;
-                border-radius:999px !important;
-                padding:2px 8px !important;
+                border:1px solid rgba(89,113,154,.34) !important;
+                border-radius:0 !important;
+                padding:4px 6px !important;
                 text-shadow:none !important;
                 max-width:100%;
+                font-family:var(--mono);
+                font-size:11px;
+                line-height:1.2;
+                margin:2px 4px 2px 0 !important;
             }
             .historical-header-card .selectize-input.items.not-full > input {
-                min-width:100% !important;
+                min-width:0 !important;
             }
             .historical-header-card .selectize-input.items > input,
             .historical-header-card .selectize-input.items.full > input,
@@ -3967,10 +3982,16 @@ app_ui = ui.page_fluid(
                 color:var(--ink-3) !important;
                 opacity:1 !important;
             }
+            .historical-header-card .selectize-control .selectize-input > input {
+                color:var(--ink) !important;
+                font-family:var(--sans) !important;
+                font-size:16px !important;
+                margin:0 !important;
+            }
             .historical-header-card .selectize-control.single .selectize-input:after,
             .historical-header-card .selectize-control.multi .selectize-input:after {
                 border-color:var(--ink-3) transparent transparent transparent !important;
-                right:0 !important;
+                right:12px !important;
             }
             .historical-header-card input[type="text"] {
                 width:100%;
@@ -3991,6 +4012,12 @@ app_ui = ui.page_fluid(
             }
             .historical-filter-field--slider {
                 grid-column:span 3;
+            }
+            .historical-slider-value {
+                color:var(--ink);
+                font-family:var(--sans);
+                font-size:14px;
+                margin-bottom:8px;
             }
             .historical-more-filters {
                 margin-top:18px;
