@@ -986,9 +986,9 @@ SIMILARITY_HISTORICAL_POOL_LABELS = {
 }
 SIMILARITY_COMPARE_CATEGORIES = [
     ("workload", "Workload", [("usg", "USG%"), ("3P_per_100_team_pos", "3PA/100 poss"), ("assisted_fg_pct", "AST'D FG%")]),
-    ("shot_style", "Shot Style", [("three_share", "3PA share"), ("rim_share", "Rim share"), ("three_assisted_pct", "3PT ast%"), ("rim_assisted_pct", "Rim ast%")]),
-    ("spacing", "Spacing", [("3P_pct", "3PT%")]),
-    ("rim_finishing", "Rim / Finishing", [("rim_pct", "Rim%"), ("FTR", "FTR")]),
+    ("shot_style", "Shot Style", [("three_share", "3PA share"), ("rim_share", "Rim share")]),
+    ("spacing", "Spacing", [("3P_pct", "3PT%"), ("three_assisted_pct", "3PT ast%")]),
+    ("rim_finishing", "Rim / Finishing", [("rim_pct", "Rim%"), ("FTR", "FTR"), ("rim_assisted_pct", "Rim ast%")]),
     ("rebounding", "Rebounding", [("ORB_pct", "ORB%"), ("DRB_pct", "DRB%")]),
     ("defense", "Defense", [("Blk_pct", "BLK%"), ("Stl_pct", "STL%"), ("personal_fouls_per_40", "PF/40"), ("stops_per_40", "Stops/40")]),
     ("ballhandling", "Ballhandling", [("AST_pct", "AST%"), ("AST_TOV", "AST/TO"), ("TOV_pct", "TOV%")]),
@@ -1273,6 +1273,14 @@ def historical_comps_for_player(row, n_comp: int = 5, pool_key: str = "all"):
     matches = neighbors_df[
         neighbors_df["target_player_name"].eq(str(row["name"]).strip())
         & neighbors_df["target_team"].eq(str(row["team"]).strip())
+    ].copy()
+    if matches.empty:
+        return []
+    matches = matches[
+        ~(
+            matches["match_player_name"].eq(str(row["name"]).strip())
+            & matches["match_team"].eq(str(row["team"]).strip())
+        )
     ].copy()
     if matches.empty:
         return []
