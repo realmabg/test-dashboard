@@ -3923,15 +3923,16 @@ app_ui = ui.page_fluid(
             }
             .historical-header-card .selectize-control {
                 margin-bottom:0;
-                padding:0 !important;
-                border:none !important;
-                background:transparent !important;
+                padding:0 12px !important;
+                border:1px solid var(--rule) !important;
+                background:rgba(10,16,27,.7) !important;
                 box-shadow:none !important;
                 width:100% !important;
+                min-height:44px !important;
             }
             .historical-header-card .selectize-control .selectize-input {
-                background:rgba(10,16,27,.7) !important;
-                border:1px solid var(--rule) !important;
+                background:transparent !important;
+                border:none !important;
                 color:var(--ink) !important;
                 border-radius:0 !important;
                 min-height:44px !important;
@@ -3939,15 +3940,15 @@ app_ui = ui.page_fluid(
                 display:flex;
                 align-items:center;
                 gap:6px;
-                padding:9px 34px 9px 12px !important;
+                padding:9px 22px 9px 0 !important;
                 width:100% !important;
             }
             .historical-header-card .selectize-control.multi .selectize-input {
-                padding-right:12px !important;
+                padding-right:0 !important;
             }
             .historical-header-card .selectize-control .selectize-input.input-active,
             .historical-header-card .selectize-control .selectize-input.dropdown-active {
-                background:rgba(10,16,27,.7) !important;
+                background:transparent !important;
             }
             .historical-header-card .selectize-dropdown {
                 background:#131b29;
@@ -3994,7 +3995,7 @@ app_ui = ui.page_fluid(
             .historical-header-card .selectize-control.single .selectize-input:after,
             .historical-header-card .selectize-control.multi .selectize-input:after {
                 border-color:var(--ink-3) transparent transparent transparent !important;
-                right:12px !important;
+                right:-2px !important;
             }
             .historical-header-card input[type="text"] {
                 width:100%;
