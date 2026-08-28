@@ -1263,7 +1263,6 @@ def make_historical_beta_tab():
                     ui.div(
                         {"class": "historical-filter-field historical-filter-field--slider"},
                         ui.div("Height range", class_="historical-filter-title"),
-                        ui.div(ui.output_text("hist_height_range_label"), class_="historical-slider-value"),
                         ui.input_slider(
                             "hist_height",
                             None,
@@ -3928,6 +3927,7 @@ app_ui = ui.page_fluid(
                 border:none !important;
                 background:transparent !important;
                 box-shadow:none !important;
+                width:100% !important;
             }
             .historical-header-card .selectize-control .selectize-input {
                 background:rgba(10,16,27,.7) !important;
@@ -3940,6 +3940,7 @@ app_ui = ui.page_fluid(
                 align-items:center;
                 gap:6px;
                 padding:9px 34px 9px 12px !important;
+                width:100% !important;
             }
             .historical-header-card .selectize-control.multi .selectize-input {
                 padding-right:12px !important;
@@ -3987,6 +3988,8 @@ app_ui = ui.page_fluid(
                 font-family:var(--sans) !important;
                 font-size:16px !important;
                 margin:0 !important;
+                flex:1 1 100% !important;
+                width:100% !important;
             }
             .historical-header-card .selectize-control.single .selectize-input:after,
             .historical-header-card .selectize-control.multi .selectize-input:after {
@@ -4012,12 +4015,6 @@ app_ui = ui.page_fluid(
             }
             .historical-filter-field--slider {
                 grid-column:span 3;
-            }
-            .historical-slider-value {
-                color:var(--ink);
-                font-family:var(--sans);
-                font-size:14px;
-                margin-bottom:8px;
             }
             .historical-more-filters {
                 margin-top:18px;
@@ -4313,6 +4310,53 @@ app_ui = ui.page_fluid(
                 });
             }
 
+            function inchesToDisplay(value) {
+                var num = Number(value);
+                if (!Number.isFinite(num)) return '';
+                var whole = Math.round(num);
+                var feet = Math.floor(whole / 12);
+                var inches = whole % 12;
+                return feet + "'" + inches + '"';
+            }
+
+            function updateHistoricalHeightSliderLabels() {
+                var input = document.getElementById('hist_height');
+                if (!input) return;
+                var shell = input.parentElement;
+                if (!shell) return;
+                var from = shell.querySelector('.irs-from');
+                var to = shell.querySelector('.irs-to');
+                var single = shell.querySelector('.irs-single');
+                var raw = String(input.value || '');
+                if (!raw) return;
+                var parts = raw.split(';');
+                if (parts.length >= 1 && from) {
+                    from.textContent = inchesToDisplay(parts[0]);
+                }
+                if (parts.length >= 2 && to) {
+                    to.textContent = inchesToDisplay(parts[1]);
+                } else if (parts.length >= 1 && single) {
+                    single.textContent = inchesToDisplay(parts[0]);
+                }
+            }
+
+            function initHistoricalHeightSliderFormatting() {
+                var input = document.getElementById('hist_height');
+                if (!input || input.dataset.codexHeightLabelsBound === '1') return;
+                var sync = function() {
+                    window.requestAnimationFrame(updateHistoricalHeightSliderLabels);
+                };
+                input.addEventListener('change', sync);
+                input.addEventListener('input', sync);
+                var shell = input.parentElement;
+                if (shell && window.MutationObserver) {
+                    var observer = new MutationObserver(sync);
+                    observer.observe(shell, { childList: true, subtree: true, characterData: true });
+                }
+                input.dataset.codexHeightLabelsBound = '1';
+                sync();
+            }
+
             function bindDocumentScatterClicks() {
                 if (!document.body || document.body.dataset.codexGlobalScatterBound === '1') return;
                 document.addEventListener('click', function(ev) {
@@ -4374,6 +4418,8 @@ app_ui = ui.page_fluid(
             function initScatterBindings() {
                 bindPlotlyScatterClicks();
                 bindDocumentScatterClicks();
+                initHistoricalHeightSliderFormatting();
+                updateHistoricalHeightSliderLabels();
                 if (window.Shiny && window.Shiny.setInputValue && document.body.dataset.codexSelectionsReset !== '1') {
                     window.Shiny.setInputValue('reset_all_selections', Math.random(), {priority: 'event'});
                     document.body.dataset.codexSelectionsReset = '1';
@@ -4382,9 +4428,14 @@ app_ui = ui.page_fluid(
 
             document.addEventListener('DOMContentLoaded', initScatterBindings);
             document.addEventListener('shiny:connected', initScatterBindings);
-            document.addEventListener('shiny:value', function() {
+            document.addEventListener('shiny:value', function(ev) {
                 bindPlotlyScatterClicks();
+                if (ev && ev.target && ev.target.id === 'hist_height') {
+                    window.requestAnimationFrame(updateHistoricalHeightSliderLabels);
+                }
+                initHistoricalHeightSliderFormatting();
             }, true);
+            window.setInterval(updateHistoricalHeightSliderLabels, 1000);
         """),
     ),
 
