@@ -1606,6 +1606,12 @@ def historical_current_comp_cards(
 
 def make_historical_profile_modal(row):
     source_profile = historical_compare_profile_from_row(row)
+    exclude_low_sample = bool(hist_modal_exclude_low_sample_state.get())
+    comp_cards = historical_current_comp_cards(
+        row,
+        exclude_low_sample=exclude_low_sample,
+        open_mode="profile",
+    )
     pc = ARCHETYPE_COLOR.get(str(row.get("archetype", "") or ""), POS_COLOR.get(str(row.get("pos", "") or ""), "#888"))
     meta_badges = []
     for value in (
@@ -1705,7 +1711,25 @@ def make_historical_profile_modal(row):
         ),
         ui.div(
             {"class": "historical-profile-col"},
-            ui.output_ui("historical_profile_current_comps_ui"),
+            ui.div(
+                ui.div(
+                    {"class": "historical-profile-comps-head"},
+                    ui.div("Current Player Comps", class_="col-title"),
+                    ui.div(
+                        ui.input_checkbox(
+                            "hist_modal_exclude_low_sample_current",
+                            f"Exclude current comps under {int(HISTORICAL_CURRENT_COMP_MIN_MPG)} MPG",
+                            value=exclude_low_sample,
+                        ),
+                        class_="historical-profile-comps-controls",
+                    ),
+                ),
+                ui.div({"class": "historical-comp-list"}, *comp_cards) if comp_cards else ui.div(
+                    "No current-player comps are available for this profile yet.",
+                    class_="qual-note",
+                ),
+                class_="arch-score-panel historical-profile-comps",
+            ),
         ),
     )
     return ui.modal(
@@ -5025,6 +5049,7 @@ def server(input, output, session):
     compare_req = reactive.Value(None)
     hist_selected = reactive.Value(None)
     hist_modal_selected = reactive.Value(None)
+    hist_modal_exclude_low_sample_state = reactive.Value(False)
     hist_sort_col = reactive.Value("bpm")
     hist_sort_dir = reactive.Value("desc")
 
@@ -6115,6 +6140,7 @@ def server(input, output, session):
             return
         hist_selected.set(row_id)
         hist_modal_selected.set(row_id)
+        hist_modal_exclude_low_sample_state.set(False)
         source_row = historical_row_by_id(row_id)
         if source_row is None:
             return
@@ -6128,6 +6154,19 @@ def server(input, output, session):
             return
         import random
         modal_req.set((pid, random.random()))
+
+    @reactive.effect
+    @reactive.event(input.hist_modal_exclude_low_sample_current)
+    def _hist_modal_exclude_low_sample_current():
+        row_id = str(hist_modal_selected.get() or "").strip()
+        source_row = historical_row_by_id(row_id)
+        if source_row is None:
+            return
+        value = bool(input.hist_modal_exclude_low_sample_current())
+        if hist_modal_exclude_low_sample_state.get() == value:
+            return
+        hist_modal_exclude_low_sample_state.set(value)
+        ui.modal_show(make_historical_profile_modal(source_row))
 
     @reactive.effect
     @reactive.event(input.hist_open_compare)
@@ -6152,42 +6191,6 @@ def server(input, output, session):
                 target_profile,
                 "historical",
             )
-        )
-
-    @output
-    @render.ui
-    def historical_profile_current_comps_ui():
-        row_id = str(hist_modal_selected.get() or "").strip()
-        source_row = historical_row_by_id(row_id)
-        if source_row is None:
-            return ui.div(
-                "Choose a historical player to load current-player comps.",
-                class_="arch-score-panel historical-profile-comps qual-note",
-            )
-        exclude_low_sample = bool(input.hist_modal_exclude_low_sample_current())
-        cards = historical_current_comp_cards(
-            source_row,
-            exclude_low_sample=exclude_low_sample,
-            open_mode="profile",
-        )
-        return ui.div(
-            ui.div(
-                {"class": "historical-profile-comps-head"},
-                ui.div("Current Player Comps", class_="col-title"),
-                ui.div(
-                    ui.input_checkbox(
-                        "hist_modal_exclude_low_sample_current",
-                        f"Exclude current comps under {int(HISTORICAL_CURRENT_COMP_MIN_MPG)} MPG",
-                        value=False,
-                    ),
-                    class_="historical-profile-comps-controls",
-                ),
-            ),
-            ui.div({"class": "historical-comp-list"}, *cards) if cards else ui.div(
-                "No current-player comps are available for this profile yet.",
-                class_="qual-note",
-            ),
-            class_="arch-score-panel historical-profile-comps",
         )
 
     @output
