@@ -315,7 +315,14 @@ def build_historical_current_pool():
         current_scores[keep_cols],
         on=["name_key", "team_key", "team_key_robust"],
         how="left",
+        suffixes=("", "_historical"),
     )
+    for col in [*score_cols, *grade_cols]:
+        historical_col = f"{col}_historical"
+        if historical_col not in merged.columns:
+            continue
+        merged[col] = merged[historical_col].combine_first(merged[col])
+        merged = merged.drop(columns=[historical_col])
     return merged
 
 ARCHETYPE_LABELS = {
