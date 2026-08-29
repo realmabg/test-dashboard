@@ -283,22 +283,30 @@ D3_TOTAL      = len(d3_df)
 
 
 def build_historical_current_pool():
-    if HISTORICAL_SCORES.empty:
-        return pd.DataFrame()
-    current_scores = HISTORICAL_SCORES[HISTORICAL_SCORES["year"].eq(D1_CURRENT_SEASON)].copy()
-    if current_scores.empty:
-        return pd.DataFrame()
-    current_scores["name_key"] = current_scores["player_name"].map(normalize_lookup_key)
-    current_scores["team_key"] = current_scores["team"].map(normalize_lookup_key)
-    current_scores["team_key_robust"] = current_scores["team"].map(normalize_team_lookup_key)
-
     current_players = d1_df.copy()
     current_players["name_key"] = current_players["name"].map(normalize_lookup_key)
     current_players["team_key"] = current_players["team"].map(normalize_lookup_key)
     current_players["team_key_robust"] = current_players["team"].map(normalize_team_lookup_key)
+    for compare_key, row_key in CURRENT_TO_COMPARE_KEY.items():
+        if compare_key not in current_players.columns:
+            current_players[compare_key] = _as_float(np.nan)
+        if row_key in current_players.columns:
+            current_players[compare_key] = pd.to_numeric(current_players[row_key], errors="coerce")
+    current_players["height_inches"] = pd.to_numeric(current_players.get("heightIn"), errors="coerce")
+
+    if HISTORICAL_SCORES.empty:
+        return current_players
+
+    current_scores = HISTORICAL_SCORES[HISTORICAL_SCORES["year"].eq(D1_CURRENT_SEASON)].copy()
+    if current_scores.empty:
+        return current_players
+    current_scores["name_key"] = current_scores["player_name"].map(normalize_lookup_key)
+    current_scores["team_key"] = current_scores["team"].map(normalize_lookup_key)
+    current_scores["team_key_robust"] = current_scores["team"].map(normalize_team_lookup_key)
 
     score_cols = [f"{category_key}_score" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES]
-    keep_cols = ["name_key", "team_key", "team_key_robust", *score_cols]
+    grade_cols = [f"{category_key}_grade" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES]
+    keep_cols = ["name_key", "team_key", "team_key_robust", *score_cols, *grade_cols]
     merged = current_players.merge(
         current_scores[keep_cols],
         on=["name_key", "team_key", "team_key_robust"],
@@ -1196,7 +1204,7 @@ def make_historical_beta_tab():
                             selected=[],
                             multiple=True,
                             options={
-                                "placeholder": "Any season",
+                                "placeholder": "\u00a0\u00a0Any season",
                                 "plugins": ["remove_button"],
                             },
                         ),
@@ -1211,7 +1219,7 @@ def make_historical_beta_tab():
                             selected=[],
                             multiple=True,
                             options={
-                                "placeholder": "Any conference",
+                                "placeholder": "\u00a0\u00a0Any conference",
                                 "plugins": ["remove_button"],
                             },
                         ),
@@ -1226,7 +1234,7 @@ def make_historical_beta_tab():
                             selected=[],
                             multiple=True,
                             options={
-                                "placeholder": "Any team",
+                                "placeholder": "\u00a0\u00a0Any team",
                                 "plugins": ["remove_button"],
                             },
                         ),
@@ -1241,7 +1249,7 @@ def make_historical_beta_tab():
                             selected=[],
                             multiple=True,
                             options={
-                                "placeholder": "Any position",
+                                "placeholder": "\u00a0\u00a0Any position",
                                 "plugins": ["remove_button"],
                             },
                         ),
@@ -1256,7 +1264,7 @@ def make_historical_beta_tab():
                             selected=[],
                             multiple=True,
                             options={
-                                "placeholder": "Any archetype",
+                                "placeholder": "\u00a0\u00a0Any archetype",
                                 "plugins": ["remove_button"],
                             },
                         ),
@@ -4614,6 +4622,36 @@ app_ui = ui.page_fluid(
                 }
             }
 
+            function styleHistoricalSelectize() {
+                document.querySelectorAll('.historical-header-card .selectize-control').forEach(function(control) {
+                    var input = control.querySelector('.selectize-input');
+                    if (input) {
+                        input.style.padding = '14px 42px 14px 22px';
+                        input.style.minHeight = '56px';
+                        input.style.boxSizing = 'border-box';
+                        input.style.display = 'flex';
+                        input.style.alignItems = 'center';
+                        input.style.alignContent = 'center';
+                        input.style.gap = '8px';
+                        input.style.border = '1px solid rgba(89,113,154,.34)';
+                        input.style.background = 'rgba(10,16,27,.7)';
+                    }
+                    control.querySelectorAll('.selectize-input > input').forEach(function(textInput) {
+                        textInput.style.padding = '0';
+                        textInput.style.margin = '0';
+                        textInput.style.lineHeight = '1.45';
+                        textInput.style.textIndent = '0';
+                    });
+                    control.querySelectorAll('.selectize-input > .item').forEach(function(item) {
+                        item.style.margin = '3px 4px 3px 0';
+                    });
+                    var caret = control.querySelector('.selectize-input.dropdown-active, .selectize-input.input-active, .selectize-input');
+                    if (caret) {
+                        caret.style.paddingRight = '42px';
+                    }
+                });
+            }
+
             function initHistoricalHeightSliderFormatting() {
                 var input = document.getElementById('hist_height');
                 if (!input || input.dataset.codexHeightLabelsBound === '1') return;
@@ -4692,6 +4730,7 @@ app_ui = ui.page_fluid(
             function initScatterBindings() {
                 bindPlotlyScatterClicks();
                 bindDocumentScatterClicks();
+                styleHistoricalSelectize();
                 initHistoricalHeightSliderFormatting();
                 updateHistoricalHeightSliderLabels();
                 if (window.Shiny && window.Shiny.setInputValue && document.body.dataset.codexSelectionsReset !== '1') {
@@ -4704,11 +4743,13 @@ app_ui = ui.page_fluid(
             document.addEventListener('shiny:connected', initScatterBindings);
             document.addEventListener('shiny:value', function(ev) {
                 bindPlotlyScatterClicks();
+                styleHistoricalSelectize();
                 if (ev && ev.target && ev.target.id === 'hist_height') {
                     window.requestAnimationFrame(updateHistoricalHeightSliderLabels);
                 }
                 initHistoricalHeightSliderFormatting();
             }, true);
+            window.setInterval(styleHistoricalSelectize, 1000);
             window.setInterval(updateHistoricalHeightSliderLabels, 1000);
         """),
     ),
