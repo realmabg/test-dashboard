@@ -1185,6 +1185,7 @@ def historical_slider_range(column: str, step: float):
 def make_historical_beta_tab():
     height_min, height_max = historical_slider_range("height_inches", 1)
     mpg_min, mpg_max = historical_slider_range("mins_per_game", 0.5)
+    ppg_min, ppg_max = historical_slider_range("pts_per_game", 0.1)
     apg_min, apg_max = historical_slider_range("ast_per_game", 0.1)
     rpg_min, rpg_max = historical_slider_range("treb_per_game", 0.1)
     bpm_min, bpm_max = historical_slider_range("bpm", 0.1)
@@ -1325,6 +1326,18 @@ def make_historical_beta_tab():
                                 min=float(apg_min),
                                 max=float(apg_max),
                                 value=float(apg_min),
+                                step=0.1,
+                            ),
+                        ),
+                        ui.div(
+                            {"class": "historical-filter-field historical-filter-field--slider"},
+                            ui.div("PPG minimum", class_="historical-filter-title"),
+                            ui.input_slider(
+                                "hist_ppg_min",
+                                None,
+                                min=float(ppg_min),
+                                max=float(ppg_max),
+                                value=float(ppg_min),
                                 step=0.1,
                             ),
                         ),
@@ -1604,9 +1617,8 @@ def historical_current_comp_cards(
     return cards
 
 
-def make_historical_profile_modal(row):
+def make_historical_profile_modal(row, *, exclude_low_sample: bool = False):
     source_profile = historical_compare_profile_from_row(row)
-    exclude_low_sample = bool(hist_modal_exclude_low_sample_state.get())
     comp_cards = historical_current_comp_cards(
         row,
         exclude_low_sample=exclude_low_sample,
@@ -5133,6 +5145,9 @@ def server(input, output, session):
         apg_min = pd.to_numeric(pd.Series([input.hist_apg_min()]), errors="coerce").iloc[0]
         if pd.notna(apg_min):
             d = d[d["ast_per_game"].ge(float(apg_min))]
+        ppg_min = pd.to_numeric(pd.Series([input.hist_ppg_min()]), errors="coerce").iloc[0]
+        if pd.notna(ppg_min):
+            d = d[d["pts_per_game"].ge(float(ppg_min))]
         rpg_min = pd.to_numeric(pd.Series([input.hist_rpg_min()]), errors="coerce").iloc[0]
         if pd.notna(rpg_min):
             d = d[d["treb_per_game"].ge(float(rpg_min))]
@@ -6144,7 +6159,12 @@ def server(input, output, session):
         source_row = historical_row_by_id(row_id)
         if source_row is None:
             return
-        ui.modal_show(make_historical_profile_modal(source_row))
+        ui.modal_show(
+            make_historical_profile_modal(
+                source_row,
+                exclude_low_sample=bool(hist_modal_exclude_low_sample_state.get()),
+            )
+        )
 
     @reactive.effect
     @reactive.event(input.hist_open_current_profile)
@@ -6166,7 +6186,12 @@ def server(input, output, session):
         if hist_modal_exclude_low_sample_state.get() == value:
             return
         hist_modal_exclude_low_sample_state.set(value)
-        ui.modal_show(make_historical_profile_modal(source_row))
+        ui.modal_show(
+            make_historical_profile_modal(
+                source_row,
+                exclude_low_sample=value,
+            )
+        )
 
     @reactive.effect
     @reactive.event(input.hist_open_compare)
