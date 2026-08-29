@@ -1561,9 +1561,51 @@ def historical_compare_profile_from_row(row):
     return profile
 
 
+def historical_current_comp_cards(
+    row,
+    *,
+    exclude_low_sample: bool = False,
+    open_mode: str = "profile",
+):
+    comps = historical_current_comps_for_player(row, exclude_low_sample=exclude_low_sample)
+    cards = []
+    for comp in comps:
+        badge_color = ARCHETYPE_COLOR.get(
+            comp["profile"].get("primary_archetype", ""),
+            POS_COLOR.get(comp.get("pos", ""), "#888"),
+        )
+        if open_mode == "compare":
+            payload = json.dumps(
+                {
+                    "source_id": str(row.get("season_player_id", "") or "").strip(),
+                    "target_id": comp["player_id"],
+                }
+            )
+            onclick = f"Shiny.setInputValue('hist_open_compare',{payload},{{priority:'event'}})"
+        else:
+            onclick = f"Shiny.setInputValue('hist_open_current_profile','{comp['player_id']}',{{priority:'event'}})"
+        cards.append(
+            ui.div(
+                {
+                    "class": "historical-comp-card",
+                    "onclick": onclick,
+                },
+                ui.div(f"{comp['rank']:02d}", class_="historical-comp-rank"),
+                ui.div(comp["name"], class_="historical-comp-name"),
+                ui.div(
+                    ui.span(comp.get("archetype", ""), class_="pos-badge", style=f"color:{badge_color};border-color:{badge_color}") if comp.get("archetype") else ui.span(),
+                    ui.span(comp["team"]),
+                    ui.span(f"· {comp.get('cls', '')}") if comp.get("cls") else ui.span(),
+                    class_="historical-comp-meta",
+                ),
+                ui.div(f"distance {comp['distance']:.2f}", class_="historical-comp-distance"),
+            )
+        )
+    return cards
+
+
 def make_historical_profile_modal(row):
     source_profile = historical_compare_profile_from_row(row)
-    comps = historical_current_comps_for_player(row)
     pc = ARCHETYPE_COLOR.get(str(row.get("archetype", "") or ""), POS_COLOR.get(str(row.get("pos", "") or ""), "#888"))
     meta_badges = []
     for value in (
@@ -1635,30 +1677,6 @@ def make_historical_profile_modal(row):
             )
         )
 
-    comp_cards = []
-    for comp in comps:
-        badge_color = ARCHETYPE_COLOR.get(
-            comp["profile"].get("primary_archetype", ""),
-            POS_COLOR.get(comp.get("pos", ""), "#888"),
-        )
-        comp_cards.append(
-            ui.div(
-                {
-                    "class": "historical-comp-card",
-                    "onclick": f"Shiny.setInputValue('hist_open_current_profile','{comp['player_id']}',{{priority:'event'}})",
-                },
-                ui.div(f"{comp['rank']:02d}", class_="historical-comp-rank"),
-                ui.div(comp["name"], class_="historical-comp-name"),
-                ui.div(
-                    ui.span(comp.get("archetype", ""), class_="pos-badge", style=f"color:{badge_color};border-color:{badge_color}") if comp.get("archetype") else ui.span(),
-                    ui.span(comp["team"]),
-                    ui.span(f"· {comp.get('cls', '')}") if comp.get("cls") else ui.span(),
-                    class_="historical-comp-meta",
-                ),
-                ui.div(f"distance {comp['distance']:.2f}", class_="historical-comp-distance"),
-            )
-        )
-
     body = ui.div(
         {"class": "historical-profile-grid"},
         ui.div(
@@ -1681,20 +1699,13 @@ def make_historical_profile_modal(row):
             ),
         ),
         ui.div(
-            {"class": "historical-profile-col"},
+            {"class": "historical-profile-col historical-profile-col--stats"},
             ui.div("Similarity Inputs", class_="col-title"),
             *stat_sections,
         ),
         ui.div(
             {"class": "historical-profile-col"},
-            ui.div(
-                ui.div("Current Player Comps", class_="col-title"),
-                ui.div({"class": "historical-comp-list"}, *comp_cards) if comp_cards else ui.div(
-                    "No current-player comps are available for this profile yet.",
-                    class_="qual-note",
-                ),
-                class_="arch-score-panel historical-profile-comps",
-            ),
+            ui.output_ui("historical_profile_current_comps_ui"),
         ),
     )
     return ui.modal(
@@ -4502,12 +4513,29 @@ app_ui = ui.page_fluid(
                 gap:20px;
                 align-items:start;
                 padding:6px 2px 8px;
+                max-height:min(82vh, 920px);
+                min-height:0;
+                overflow:hidden;
             }
             .historical-profile-col {
                 min-width:0;
+                min-height:0;
                 display:grid;
                 gap:18px;
                 align-content:start;
+                max-height:min(82vh, 920px);
+                overflow-y:auto;
+                padding-right:8px;
+            }
+            .historical-profile-col::-webkit-scrollbar {
+                width:8px;
+            }
+            .historical-profile-col::-webkit-scrollbar-thumb {
+                background:rgba(96,124,174,.42);
+                border-radius:999px;
+            }
+            .historical-profile-col--stats {
+                padding-right:14px;
             }
             .historical-profile-bio-grid {
                 grid-template-columns:repeat(4, minmax(0, 1fr));
@@ -4528,6 +4556,32 @@ app_ui = ui.page_fluid(
             .historical-profile-comps .historical-comp-name {
                 font-size:21px;
                 margin-bottom:2px;
+            }
+            .historical-profile-comps-head {
+                display:flex;
+                justify-content:space-between;
+                align-items:flex-start;
+                gap:12px;
+                margin-bottom:14px;
+            }
+            .historical-profile-comps-controls .shiny-input-container {
+                width:auto;
+                margin:0;
+            }
+            .historical-profile-comps-controls .checkbox {
+                margin:0;
+            }
+            .historical-profile-comps-controls .checkbox label {
+                color:var(--ink-2);
+                font-family:var(--mono);
+                font-size:11px;
+                letter-spacing:.08em;
+                text-transform:uppercase;
+                display:flex;
+                align-items:flex-start;
+                gap:8px;
+                margin:0;
+                line-height:1.35;
             }
             .historical-profile-section {
                 padding:16px 18px;
@@ -4970,6 +5024,7 @@ def server(input, output, session):
     modal_similarity_pool = reactive.Value("all")
     compare_req = reactive.Value(None)
     hist_selected = reactive.Value(None)
+    hist_modal_selected = reactive.Value(None)
     hist_sort_col = reactive.Value("bpm")
     hist_sort_dir = reactive.Value("desc")
 
@@ -6059,6 +6114,7 @@ def server(input, output, session):
         if not row_id:
             return
         hist_selected.set(row_id)
+        hist_modal_selected.set(row_id)
         source_row = historical_row_by_id(row_id)
         if source_row is None:
             return
@@ -6096,6 +6152,42 @@ def server(input, output, session):
                 target_profile,
                 "historical",
             )
+        )
+
+    @output
+    @render.ui
+    def historical_profile_current_comps_ui():
+        row_id = str(hist_modal_selected.get() or "").strip()
+        source_row = historical_row_by_id(row_id)
+        if source_row is None:
+            return ui.div(
+                "Choose a historical player to load current-player comps.",
+                class_="arch-score-panel historical-profile-comps qual-note",
+            )
+        exclude_low_sample = bool(input.hist_modal_exclude_low_sample_current())
+        cards = historical_current_comp_cards(
+            source_row,
+            exclude_low_sample=exclude_low_sample,
+            open_mode="profile",
+        )
+        return ui.div(
+            ui.div(
+                {"class": "historical-profile-comps-head"},
+                ui.div("Current Player Comps", class_="col-title"),
+                ui.div(
+                    ui.input_checkbox(
+                        "hist_modal_exclude_low_sample_current",
+                        f"Exclude current comps under {int(HISTORICAL_CURRENT_COMP_MIN_MPG)} MPG",
+                        value=False,
+                    ),
+                    class_="historical-profile-comps-controls",
+                ),
+            ),
+            ui.div({"class": "historical-comp-list"}, *cards) if cards else ui.div(
+                "No current-player comps are available for this profile yet.",
+                class_="qual-note",
+            ),
+            class_="arch-score-panel historical-profile-comps",
         )
 
     @output
@@ -6192,31 +6284,13 @@ def server(input, output, session):
         if source_row is None:
             return ui.div("Choose a historical player to load current-player comps.", class_="historical-empty")
         exclude_low_sample = bool(input.hist_exclude_low_sample_current())
-        comps = historical_current_comps_for_player(source_row, exclude_low_sample=exclude_low_sample)
-        if not comps:
+        cards = historical_current_comp_cards(
+            source_row,
+            exclude_low_sample=exclude_low_sample,
+            open_mode="compare",
+        )
+        if not cards:
             return ui.div("No current-player comps are available for that historical profile yet.", class_="historical-empty")
-
-        cards = []
-        for comp in comps:
-            payload = json.dumps({"source_id": row_id, "target_id": comp["player_id"]})
-            badge_color = ARCHETYPE_COLOR.get(comp["profile"].get("primary_archetype", ""), POS_COLOR.get(comp.get("pos", ""), "#888"))
-            cards.append(
-                ui.div(
-                    {
-                        "class": "historical-comp-card",
-                        "onclick": f"Shiny.setInputValue('hist_open_compare',{payload},{{priority:'event'}})",
-                    },
-                    ui.div(f"{comp['rank']:02d}", class_="historical-comp-rank"),
-                    ui.div(comp["name"], class_="historical-comp-name"),
-                    ui.div(
-                        ui.span(comp.get("archetype", ""), class_="pos-badge", style=f"color:{badge_color};border-color:{badge_color}") if comp.get("archetype") else ui.span(),
-                        ui.span(comp["team"]),
-                        ui.span(f"\u00b7 {comp.get('cls', '')}") if comp.get("cls") else ui.span(),
-                        class_="historical-comp-meta",
-                    ),
-                    ui.div(f"distance {comp['distance']:.2f}", class_="historical-comp-distance"),
-                )
-            )
 
         return ui.div(
             {"class": "historical-comps-card"},
