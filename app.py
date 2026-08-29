@@ -42,6 +42,7 @@ HISTORICAL_PLAYER_INDEX_RELATIVE_PATH = (
 )
 HISTORICAL_TABLE_LIMIT = 25
 HISTORICAL_CURRENT_COMP_LIMIT = 5
+HISTORICAL_CURRENT_COMP_MIN_MPG = 10.0
 HISTORICAL_BETA_ARCHETYPES = ["PG / Combo", "2-4 Wing", "F/C Stretch"]
 LIVE_BUILD_STAMP = "TEST BUILD 08-28-2026 · 05deefa"
 
@@ -1184,8 +1185,9 @@ def historical_slider_range(column: str, step: float):
 def make_historical_beta_tab():
     height_min, height_max = historical_slider_range("height_inches", 1)
     mpg_min, mpg_max = historical_slider_range("mins_per_game", 0.5)
+    apg_min, apg_max = historical_slider_range("ast_per_game", 0.1)
+    rpg_min, rpg_max = historical_slider_range("treb_per_game", 0.1)
     bpm_min, bpm_max = historical_slider_range("bpm", 0.1)
-    gp_min, gp_max = historical_slider_range("GP", 1)
     return ui.div(
         {"id": "hist-tab", "class": "tab-panel"},
         ui.div(
@@ -1303,14 +1305,39 @@ def make_historical_beta_tab():
                     ui.div(
                         {"class": "historical-filter-row historical-filter-row--additional"},
                         ui.div(
-                            {"class": "historical-filter-field"},
-                            ui.div("Class", class_="historical-filter-title"),
-                            ui.input_checkbox_group(
-                                "hist_class",
+                            {"class": "historical-filter-field historical-filter-field--slider"},
+                            ui.div("MPG minimum", class_="historical-filter-title"),
+                            ui.input_slider(
+                                "hist_mpg_extra_min",
                                 None,
-                                choices={cls: cls for cls in CLASSES},
-                                selected=[],
-                                inline=True,
+                                min=float(mpg_min),
+                                max=float(mpg_max),
+                                value=float(mpg_min),
+                                step=0.5,
+                            ),
+                        ),
+                        ui.div(
+                            {"class": "historical-filter-field historical-filter-field--slider"},
+                            ui.div("APG minimum", class_="historical-filter-title"),
+                            ui.input_slider(
+                                "hist_apg_min",
+                                None,
+                                min=float(apg_min),
+                                max=float(apg_max),
+                                value=float(apg_min),
+                                step=0.1,
+                            ),
+                        ),
+                        ui.div(
+                            {"class": "historical-filter-field historical-filter-field--slider"},
+                            ui.div("RPG minimum", class_="historical-filter-title"),
+                            ui.input_slider(
+                                "hist_rpg_min",
+                                None,
+                                min=float(rpg_min),
+                                max=float(rpg_max),
+                                value=float(rpg_min),
+                                step=0.1,
                             ),
                         ),
                         ui.div(
@@ -1323,18 +1350,6 @@ def make_historical_beta_tab():
                                 max=float(bpm_max),
                                 value=float(bpm_min),
                                 step=0.1,
-                            ),
-                        ),
-                        ui.div(
-                            {"class": "historical-filter-field historical-filter-field--slider"},
-                            ui.div("Games minimum", class_="historical-filter-title"),
-                            ui.input_slider(
-                                "hist_gp_min",
-                                None,
-                                min=int(gp_min),
-                                max=int(gp_max),
-                                value=max(1, int(gp_min)),
-                                step=1,
                             ),
                         ),
                     ),
@@ -1693,10 +1708,18 @@ def make_historical_profile_modal(row):
     )
 
 
-def historical_current_comps_for_player(row, n_comp: int = HISTORICAL_CURRENT_COMP_LIMIT):
+def historical_current_comps_for_player(
+    row,
+    n_comp: int = HISTORICAL_CURRENT_COMP_LIMIT,
+    exclude_low_sample: bool = False,
+):
     if HISTORICAL_CURRENT_POOL.empty:
         return []
     pool = HISTORICAL_CURRENT_POOL.copy()
+    if exclude_low_sample:
+        pool = pool[pool["mpg"].fillna(0).ge(HISTORICAL_CURRENT_COMP_MIN_MPG)].copy()
+        if pool.empty:
+            return []
     source_name_key = normalize_lookup_key(row.get("player_name"))
     source_team_key = normalize_lookup_key(row.get("team"))
     pool = pool[
@@ -4378,6 +4401,30 @@ app_ui = ui.page_fluid(
                 border-bottom:1px solid var(--rule);
                 margin-bottom:14px;
             }
+            .historical-comps-toggle {
+                display:flex;
+                align-items:center;
+                justify-content:flex-end;
+                min-width:220px;
+            }
+            .historical-comps-toggle .shiny-input-container {
+                width:auto;
+                margin:0;
+            }
+            .historical-comps-toggle .checkbox {
+                margin:0;
+            }
+            .historical-comps-toggle .checkbox label {
+                color:var(--ink-2);
+                font-family:var(--mono);
+                font-size:11px;
+                letter-spacing:.08em;
+                text-transform:uppercase;
+                display:flex;
+                align-items:center;
+                gap:8px;
+                margin:0;
+            }
             .historical-comps-title {
                 color:var(--ink);
                 font-family:var(--serif);
@@ -4537,6 +4584,10 @@ app_ui = ui.page_fluid(
                 .historical-comps-head {
                     flex-direction:column;
                     align-items:flex-start;
+                }
+                .historical-comps-toggle {
+                    min-width:0;
+                    justify-content:flex-start;
                 }
                 .historical-filter-field,
                 .historical-filter-field--slider,
@@ -4991,20 +5042,23 @@ def server(input, output, session):
         archetypes = [str(value).strip() for value in list(input.hist_archetype() or []) if str(value).strip()]
         if archetypes:
             d = d[d["archetype"].isin(archetypes)]
-        classes = list(input.hist_class() or [])
-        if classes:
-            d = d[d["class"].isin(classes)]
         lo, hi = safe_range_input(input.hist_height(), HISTORICAL_PLAYER_INDEX, "height_inches", 1)
         d = d[d["height_inches"].between(lo, hi, inclusive="both")]
         mpg_min = pd.to_numeric(pd.Series([input.hist_mpg_min()]), errors="coerce").iloc[0]
         if pd.notna(mpg_min):
             d = d[d["mins_per_game"].ge(float(mpg_min))]
+        mpg_extra_min = pd.to_numeric(pd.Series([input.hist_mpg_extra_min()]), errors="coerce").iloc[0]
+        if pd.notna(mpg_extra_min):
+            d = d[d["mins_per_game"].ge(float(mpg_extra_min))]
+        apg_min = pd.to_numeric(pd.Series([input.hist_apg_min()]), errors="coerce").iloc[0]
+        if pd.notna(apg_min):
+            d = d[d["ast_per_game"].ge(float(apg_min))]
+        rpg_min = pd.to_numeric(pd.Series([input.hist_rpg_min()]), errors="coerce").iloc[0]
+        if pd.notna(rpg_min):
+            d = d[d["treb_per_game"].ge(float(rpg_min))]
         bpm_min = pd.to_numeric(pd.Series([input.hist_bpm_min()]), errors="coerce").iloc[0]
         if pd.notna(bpm_min):
             d = d[d["bpm"].ge(float(bpm_min))]
-        gp_min = pd.to_numeric(pd.Series([input.hist_gp_min()]), errors="coerce").iloc[0]
-        if pd.notna(gp_min):
-            d = d[d["GP"].ge(float(gp_min))]
         sort_col = hist_sort_col.get()
         sort_dir = hist_sort_dir.get()
         ascending = sort_dir == "asc"
@@ -6137,7 +6191,8 @@ def server(input, output, session):
         source_row = historical_row_by_id(row_id)
         if source_row is None:
             return ui.div("Choose a historical player to load current-player comps.", class_="historical-empty")
-        comps = historical_current_comps_for_player(source_row)
+        exclude_low_sample = bool(input.hist_exclude_low_sample_current())
+        comps = historical_current_comps_for_player(source_row, exclude_low_sample=exclude_low_sample)
         if not comps:
             return ui.div("No current-player comps are available for that historical profile yet.", class_="historical-empty")
 
@@ -6167,8 +6222,18 @@ def server(input, output, session):
             {"class": "historical-comps-card"},
             ui.div(
                 {"class": "historical-comps-head"},
-                ui.div("Current players most like this profile", class_="historical-comps-title"),
-                ui.div(historical_profile_subtitle(source_row), class_="historical-comps-subtitle"),
+                ui.div(
+                    ui.div("Current players most like this profile", class_="historical-comps-title"),
+                    ui.div(historical_profile_subtitle(source_row), class_="historical-comps-subtitle"),
+                ),
+                ui.div(
+                    ui.input_checkbox(
+                        "hist_exclude_low_sample_current",
+                        f"Exclude current comps under {int(HISTORICAL_CURRENT_COMP_MIN_MPG)} MPG",
+                        value=False,
+                    ),
+                    class_="historical-comps-toggle",
+                ),
             ),
             ui.div({"class": "historical-comp-list"}, *cards),
         )
