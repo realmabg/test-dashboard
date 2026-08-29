@@ -3136,7 +3136,7 @@ def make_sidebar(prefix, df, conferences):
     archetype_v2_filter = (
         ui.div(
             ui.div(
-                ui.span("UCSD Position"),
+                ui.span("Archetype"),
                 ui.tags.button(
                     "clear",
                     class_="clear-btn",
@@ -3155,7 +3155,7 @@ def make_sidebar(prefix, df, conferences):
     )
     archetype_v2_score_filter = (
         ui.div(
-            ui.div("Minimum UCSD position weight", class_="sb-section-head"),
+            ui.div("Minimum archetype score", class_="sb-section-head"),
             ui.input_slider(
                 f"{prefix}_score_v2_min",
                 None,
@@ -3215,7 +3215,7 @@ def make_sidebar(prefix, df, conferences):
         ui.div(ui.div("Search by name", class_="sb-section-head"),
                ui.input_text(f"{prefix}_q", None, placeholder="e.g. Marcus Jackson"),
                class_="sb-section"),
-        ui.div(ui.div("UCSD Position", class_="sb-section-head"),
+        ui.div(ui.div("Qualified UCSD Position", class_="sb-section-head"),
                ui.input_select(
                    f"{prefix}_qualification_filter",
                    None,
@@ -3232,7 +3232,7 @@ def make_sidebar(prefix, df, conferences):
                ui.input_checkbox_group(f"{prefix}_archetypes", None,
                                        choices={a: archetype_label(a) for a in ARCHETYPE_ORDER}),
                class_="sb-section"),
-        ui.div(ui.div("Minimum archetype score", class_="sb-section-head"),
+        ui.div(ui.div("Minimum UCSD Position Score", class_="sb-section-head"),
                ui.input_slider(f"{prefix}_score_min", None, min=0, max=100,
                                value=0, step=1),
                class_="sb-section"),
@@ -4981,8 +4981,7 @@ app_ui = ui.page_fluid(
             ui.div({"class": "mast-left"},
                    ui.div(ui.HTML('NCAA Men\'s Basketball <span class="dot"></span> 2025–26'),
                           class_="kicker"),
-                   ui.div(ui.HTML("Player <em>Dashboard</em>"), class_="atlas-title"),
-                   ui.div(LIVE_BUILD_STAMP, class_="build-stamp")),
+                   ui.div(ui.HTML("Player <em>Dashboard</em>"), class_="atlas-title")),
             ui.div({"class": "mast-meta"},
                    ui.div(ui.div(str(D1_TOTAL),                class_="mast-stat-num"),
                           ui.div("D-I Players",                class_="mast-stat-lbl"), class_="mast-stat"),
