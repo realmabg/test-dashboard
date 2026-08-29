@@ -5384,7 +5384,7 @@ def server(input, output, session):
     def sync_scatter(fig, plot_df, selected_id, dimmed_arch, click_handler):
         compress_pc1_tail = fig is d2_fig
         compress_pc2_tail = fig is d2_fig
-        d1_default_view = fig is d1_fig
+        d1_default_view = fig is d1_fig and d1_filters_are_default()
         fixed_x_range = [-5, 6.5] if d1_default_view else None
         fixed_y_range = [-4.5, 6] if d1_default_view else None
         clip_x_range = [-4.5, 6] if d1_default_view else None
