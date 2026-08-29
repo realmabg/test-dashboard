@@ -37,6 +37,9 @@ HISTORICAL_NEIGHBORS_RELATIVE_PATHS = {
 HISTORICAL_SCORE_RELATIVE_PATH = (
     Path("historical_comps_output") / "d1_historical_category_scores.csv"
 )
+HISTORICAL_CURRENT_SCORE_RELATIVE_PATH = (
+    Path("historical_comps_output") / "d1_historical_current_category_scores_2026.csv"
+)
 HISTORICAL_PLAYER_INDEX_RELATIVE_PATH = (
     Path("historical_comps_output") / "d1_historical_player_index.csv"
 )
@@ -94,6 +97,9 @@ def _resolve_optional_relative_path(relative_path: Path):
 
 
 def resolve_historical_score_path():
+    current_only = _resolve_optional_relative_path(HISTORICAL_CURRENT_SCORE_RELATIVE_PATH)
+    if current_only is not None:
+        return current_only
     return _resolve_optional_relative_path(HISTORICAL_SCORE_RELATIVE_PATH)
 
 
@@ -1629,7 +1635,7 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False):
     comp_cards = historical_current_comp_cards(
         row,
         exclude_low_sample=exclude_low_sample,
-        open_mode="profile",
+        open_mode="compare",
     )
     pc = ARCHETYPE_COLOR.get(str(row.get("archetype", "") or ""), POS_COLOR.get(str(row.get("pos", "") or ""), "#888"))
     meta_badges = []
