@@ -668,6 +668,7 @@ def load_d1_data(
 
     # Usage — 0-100 in D-I → /100 for consiwaistency with D-II (both end up ~0.19 mean)
     df["usg"] = n("usg") / 100.0
+    df["3P_per_100_team_pos"] = n("3P_per_100_team_pos")
 
     # 3P share — already 0-1
     df["three_share"] = n("three_share")

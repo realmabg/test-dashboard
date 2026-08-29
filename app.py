@@ -2009,7 +2009,24 @@ def make_similarity_compare_modal(
             },
             *[
                 ui.div(
-                    ui.div(profile["player_name"], class_="compare-player-name"),
+                    ui.div(
+                        ui.div(profile["player_name"], class_="compare-player-name"),
+                        ui.tags.button(
+                            {
+                                "class": "pill-btn compare-player-inline-btn",
+                                "onclick": (
+                                    "window.__compareModalNavigating = true;"
+                                    f"Shiny.setInputValue('modal_compare_open_target','{profile['player_id']}',{{priority:'event'}})"
+                                ),
+                            },
+                            "Full stats",
+                        ) if (
+                            comparison_origin == "historical"
+                            and idx == 1
+                            and profile.get("player_id")
+                        ) else ui.div(),
+                        class_="compare-player-head",
+                    ),
                     ui.div(profile.get("subtitle", ""), class_="compare-player-sub"),
                     ui.div(
                         f"Height: {_format_compare_value('height_inches', profile.get('height_inches'))}",
@@ -2017,7 +2034,7 @@ def make_similarity_compare_modal(
                     ),
                     class_="compare-player-card",
                 )
-                for profile in profiles
+                for idx, profile in enumerate(profiles)
             ],
         ),
         ui.div(
@@ -3747,6 +3764,12 @@ app_ui = ui.page_fluid(
                 background:rgba(255,255,255,0.02);
                 padding:12px 14px;
             }
+            .compare-player-head {
+                display:flex;
+                align-items:flex-start;
+                justify-content:space-between;
+                gap:12px;
+            }
             .compare-player-name {
                 font-family:var(--serif);
                 font-size:26px;
@@ -3754,6 +3777,10 @@ app_ui = ui.page_fluid(
                 line-height:1.05;
                 color:var(--ink);
                 margin-bottom:6px;
+            }
+            .compare-player-inline-btn {
+                white-space:nowrap;
+                flex:0 0 auto;
             }
             .compare-player-sub {
                 color:var(--ink-3);
