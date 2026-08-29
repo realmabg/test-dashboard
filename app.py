@@ -4451,42 +4451,42 @@ app_ui = ui.page_fluid(
             }
             .historical-profile-grid {
                 display:grid;
-                grid-template-columns:minmax(300px, .92fr) minmax(420px, 1.2fr) minmax(320px, 1fr);
-                gap:28px;
+                grid-template-columns:minmax(270px, .84fr) minmax(360px, 1fr) minmax(280px, .82fr);
+                gap:20px;
                 align-items:start;
-                padding:8px 6px 10px;
+                padding:6px 2px 8px;
             }
             .historical-profile-col {
                 min-width:0;
                 display:grid;
-                gap:22px;
+                gap:18px;
                 align-content:start;
             }
             .historical-profile-bio-grid {
                 grid-template-columns:repeat(4, minmax(0, 1fr));
-                row-gap:18px;
-                column-gap:18px;
+                row-gap:14px;
+                column-gap:14px;
             }
             .historical-profile-comps {
                 min-height:100%;
-                padding:18px 18px 20px;
+                padding:16px 16px 18px;
             }
             .historical-profile-comps .historical-comp-list {
                 grid-template-columns:1fr;
-                gap:14px;
+                gap:12px;
             }
             .historical-profile-comps .historical-comp-card {
-                padding:16px 16px 17px;
+                padding:14px 14px 15px;
             }
             .historical-profile-comps .historical-comp-name {
                 font-size:21px;
                 margin-bottom:2px;
             }
             .historical-profile-section {
-                padding:18px 22px;
+                padding:16px 18px;
             }
             .historical-profile-section .compare-stat-row {
-                padding:14px 0;
+                padding:12px 0;
             }
             .historical-profile-section .compare-section-title {
                 margin-bottom:10px;
