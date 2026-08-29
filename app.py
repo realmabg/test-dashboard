@@ -293,6 +293,11 @@ def build_historical_current_pool():
         if row_key in current_players.columns:
             current_players[compare_key] = pd.to_numeric(current_players[row_key], errors="coerce")
     current_players["height_inches"] = pd.to_numeric(current_players.get("heightIn"), errors="coerce")
+    score_cols = [f"{category_key}_score" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES]
+    grade_cols = [f"{category_key}_grade" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES]
+    for col in [*score_cols, *grade_cols]:
+        if col not in current_players.columns:
+            current_players[col] = np.nan
 
     if HISTORICAL_SCORES.empty:
         return current_players
@@ -304,8 +309,6 @@ def build_historical_current_pool():
     current_scores["team_key"] = current_scores["team"].map(normalize_lookup_key)
     current_scores["team_key_robust"] = current_scores["team"].map(normalize_team_lookup_key)
 
-    score_cols = [f"{category_key}_score" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES]
-    grade_cols = [f"{category_key}_grade" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES]
     keep_cols = ["name_key", "team_key", "team_key_robust", *score_cols, *grade_cols]
     merged = current_players.merge(
         current_scores[keep_cols],
@@ -1707,7 +1710,7 @@ def historical_current_comps_for_player(row, n_comp: int = HISTORICAL_CURRENT_CO
 
     score_cols = [
         col for col in HISTORICAL_COMPARE_SCORE_COLUMNS
-        if np.isfinite(_as_float(row.get(col)))
+        if col in pool.columns and np.isfinite(_as_float(row.get(col)))
     ]
     if len(score_cols) >= 3:
         score_pool = pool.dropna(subset=score_cols).copy()
