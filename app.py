@@ -1727,22 +1727,44 @@ def historical_current_comps_for_player(row, n_comp: int = HISTORICAL_CURRENT_CO
             col for col in HISTORICAL_COMPARE_FALLBACK_COLUMNS
             if np.isfinite(_as_float(row.get(col))) and col in pool.columns
         ]
-        fallback_pool = pool.dropna(subset=fallback_cols).copy() if fallback_cols else pd.DataFrame()
-        if fallback_pool.empty:
+        if not fallback_cols:
             return []
-        row_values = np.array([_as_float(row.get(col)) for col in fallback_cols], dtype=float)
+        fallback_pool = pool.copy()
         pool_values = fallback_pool[fallback_cols].to_numpy(dtype=float)
+        row_values = np.array([_as_float(row.get(col)) for col in fallback_cols], dtype=float)
         means = np.nanmean(pool_values, axis=0)
         stds = np.nanstd(pool_values, axis=0)
-        valid = stds > 1e-8
-        if not valid.any():
+        valid_stat_mask = np.isfinite(means) & np.isfinite(stds) & (stds > 1e-8)
+        if valid_stat_mask.sum() < 3:
             return []
-        row_z = (row_values[valid] - means[valid]) / stds[valid]
-        pool_z = (pool_values[:, valid] - means[valid]) / stds[valid]
-        fallback_pool["historical_distance"] = np.sqrt(((pool_z - row_z) ** 2).sum(axis=1))
+        pool_values = pool_values[:, valid_stat_mask]
+        row_values = row_values[valid_stat_mask]
+        means = means[valid_stat_mask]
+        stds = stds[valid_stat_mask]
+        row_z = (row_values - means) / stds
+        pool_z = (pool_values - means) / stds
+        overlap_mask = np.isfinite(pool_z)
+        shared_counts = overlap_mask.sum(axis=1)
+        if not np.any(shared_counts >= 3):
+            return []
+        diffs = np.where(overlap_mask, pool_z - row_z, 0.0)
+        squared = np.square(diffs).sum(axis=1)
+        scaled = np.sqrt(squared / np.maximum(shared_counts, 1)) * np.sqrt(len(row_z))
+        fallback_pool["historical_shared_stats"] = shared_counts
+        fallback_pool["historical_distance"] = scaled
+        fallback_pool = fallback_pool[fallback_pool["historical_shared_stats"] >= 3].copy()
+        if fallback_pool.empty:
+            return []
         pool = fallback_pool
 
-    pool = pool.sort_values(["historical_distance", "mpg"], ascending=[True, False]).head(n_comp)
+    sort_cols = ["historical_distance"]
+    ascending = [True]
+    if "historical_shared_stats" in pool.columns:
+        sort_cols.append("historical_shared_stats")
+        ascending.append(False)
+    sort_cols.append("mpg")
+    ascending.append(False)
+    pool = pool.sort_values(sort_cols, ascending=ascending).head(n_comp)
     comps = []
     for idx, comp in pool.iterrows():
         comps.append(
@@ -4429,30 +4451,45 @@ app_ui = ui.page_fluid(
             }
             .historical-profile-grid {
                 display:grid;
-                grid-template-columns:minmax(280px, .9fr) minmax(360px, 1.15fr) minmax(260px, .95fr);
-                gap:18px;
+                grid-template-columns:minmax(300px, .92fr) minmax(420px, 1.2fr) minmax(320px, 1fr);
+                gap:28px;
                 align-items:start;
+                padding:8px 6px 10px;
             }
             .historical-profile-col {
                 min-width:0;
                 display:grid;
-                gap:16px;
+                gap:22px;
                 align-content:start;
             }
             .historical-profile-bio-grid {
                 grid-template-columns:repeat(4, minmax(0, 1fr));
+                row-gap:18px;
+                column-gap:18px;
             }
             .historical-profile-comps {
                 min-height:100%;
+                padding:18px 18px 20px;
             }
             .historical-profile-comps .historical-comp-list {
                 grid-template-columns:1fr;
+                gap:14px;
             }
             .historical-profile-comps .historical-comp-card {
-                padding:12px 13px;
+                padding:16px 16px 17px;
             }
             .historical-profile-comps .historical-comp-name {
                 font-size:21px;
+                margin-bottom:2px;
+            }
+            .historical-profile-section {
+                padding:18px 22px;
+            }
+            .historical-profile-section .compare-stat-row {
+                padding:14px 0;
+            }
+            .historical-profile-section .compare-section-title {
+                margin-bottom:10px;
             }
             .historical-profile-grade-list {
                 display:grid;
