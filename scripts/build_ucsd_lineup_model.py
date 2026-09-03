@@ -298,20 +298,9 @@ def main() -> None:
             unmatched_official.append(info["name"])
         players[pid] = official_player_record(info, row, peer_df)
 
-    # "Potential Additions": real, currently-available (uncommitted)
-    # transfers, ranked by ORtg among reasonably-used players, for the
-    # portal-browsing panel. Not UCSD targets -- just real available players.
-    available_names = set(
-        transfers.loc[transfers["status"] == "Available transfer", "player"]
-    )
-    avail_df = peer_df[peer_df["player_name"].isin(available_names)].copy()
-    avail_df = avail_df.sort_values("bpm", ascending=False).head(15)
+    # Keep the UCSD beta roster-only. The page should not surface departed
+    # UCSD players or extra transfer-pool candidates in the lineup builder.
     portal = []
-    for _, row in avail_df.iterrows():
-        rec = player_record(row, peer_df, is_new=True, prior_school=row["team"])
-        rec["id"] = slugify(row["player_name"], used_ids)
-        used_ids.add(rec["id"])
-        portal.append(rec)
 
     out = {
         "meta": {

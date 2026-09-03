@@ -1863,32 +1863,8 @@ async function loadModelData() {
     p.adjBpr = confAdj(p.bpr, p.fromConf);
     PLAYERS[id] = p;
   });
-  // Shim field names the existing Portal-tab code (renderPortal/portalAddToLineup) expects.
-  PORTAL_PLAYERS = data.portal.map(p => ({
-    ...p,
-    team: p.priorSchool,
-    conf: p.fromConf,
-    confAdj: CONF_STRENGTH[(p.fromConf || '').toLowerCase()] || 0,
-    adjBpr: confAdj(p.bpr, p.fromConf),
-  }));
-  // Also surface a handful directly in PLAYERS (as "Potential Additions" in
-  // the roster sidebar) so the normal add/drag/drawer code path works on them.
-  PORTAL_PLAYERS.slice(0, 6).forEach(p => {
-    PLAYERS[p.id] = { ...p, isPotential: true };
-  });
-  const urlWatchlistPotentials = readWatchlistPotentialsFromUrl();
-  const hasUrlWatchlistPotentials = Array.isArray(urlWatchlistPotentials) && urlWatchlistPotentials.length > 0;
-  if (hasUrlWatchlistPotentials) {
-    applyWatchlistPotentials(urlWatchlistPotentials);
-    try {
-      localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(urlWatchlistPotentials));
-    } catch (err) {
-      console.warn('Unable to persist watchlist lineup candidates from URL', err);
-    }
-  } else {
-    applyWatchlistPotentials(readWatchlistPotentialsFromStorage());
-  }
-  syncWatchlistPotentialsFromParent();
+  PORTAL_PLAYERS = [];
+  WATCHLIST_POTENTIALS = [];
   DEFAULT_ROTATION = buildPresetLineup('base').rotation;
 
   const formulaEl = document.getElementById('method-ortg-formula');
@@ -1990,14 +1966,13 @@ function renderRosterPanel() {
   html += returners.map(([id, p]) => playerRowHtml(id, p)).join('');
   html += '<div class="group-label" style="color: var(--gold);">New Additions (2026 transfer portal, committed)</div>';
   html += newAdds.map(([id, p]) => playerRowHtml(id, p, { gold: true, badge: p.fromConf, school: p.priorSchool })).join('');
-  html += '<div class="group-label" style="color: var(--muted); margin-top: 8px;">Potential Additions — real available (uncommitted) transfers, ranked by BPM</div>';
-  html += potential.map(([id, p]) => {
-    const school = p.isWatchlistPotential
-      ? [p.team, p.conf ? '(' + p.conf + ')' : '', p.division].filter(Boolean).join(' ')
-      : p.priorSchool + ' (' + p.fromConf + ')';
-    const badge = p.isWatchlistPotential ? 'Watchlist' : null;
-    return playerRowHtml(id, p, { muted: true, school, badge });
-  }).join('');
+  if (potential.length > 0) {
+    html += '<div class="group-label" style="color: var(--muted); margin-top: 8px;">Potential Additions</div>';
+    html += potential.map(([id, p]) => {
+      const school = [p.team, p.conf ? '(' + p.conf + ')' : '', p.division].filter(Boolean).join(' ');
+      return playerRowHtml(id, p, { muted: true, school });
+    }).join('');
+  }
   el.innerHTML = html;
 }
 
@@ -4027,7 +4002,6 @@ async function initApp() {
   Object.assign(benchMinutes, DEFAULT_ROTATION);
   renderConferenceContext();
   renderPortal();
-  setInterval(syncWatchlistPotentialsFromParent, 1000);
   setTimeout(() => { renderBench(); updateRatings(); initSliderFills(); initSavedLineups(); initProjectedStatsCard(); }, 100);
 }
 
