@@ -1828,7 +1828,7 @@ CURRENT_TO_COMPARE_KEY = {
     "three_share": "three_share",
     "rim_share": "rim_share",
     "mid_share": "mid_share",
-    "dunk_share": "dunk_rate_at_rim",
+    "dunk_share": "dunk_share",
     "three_assisted_pct": "three_assisted_pct",
     "rim_assisted_pct": "rim_assisted_pct",
     "eFG": "efg",
