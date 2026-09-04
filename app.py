@@ -1323,8 +1323,8 @@ def similarity_beta_rows(row, comps, board_index: int, *, compact: bool = True):
                     class_="similarity-beta-player-cell",
                 ),
                 ui.div(similarity_beta_comp_metric(comp, "pts_per_game"), class_="similarity-beta-stat"),
+                ui.div(similarity_beta_comp_metric(comp, "ast_per_game"), class_="similarity-beta-stat"),
                 ui.div(similarity_beta_comp_metric(comp, "treb_per_game"), class_="similarity-beta-stat"),
-                ui.div(f"{comp['distance']:.2f}", class_="similarity-beta-distance"),
             )
         )
     if not rows:
@@ -1356,8 +1356,8 @@ def similarity_beta_table_head():
         ui.div("Δ"),
         ui.div("Current player"),
         ui.div("PPG"),
+        ui.div("APG"),
         ui.div("RPG"),
-        ui.div("Dist."),
     )
 
 
@@ -2320,9 +2320,9 @@ def historical_current_comps_for_player(
                 "pos": comp.get("pos", ""),
                 "archetype": archetype_label(comp.get("primary_archetype", "")),
                 "mins_per_game": _as_float(comp.get("mins_per_game")),
-                "pts_per_game": _as_float(comp.get("pts_per_game")),
-                "ast_per_game": _as_float(comp.get("ast_per_game")),
-                "treb_per_game": _as_float(comp.get("treb_per_game")),
+                "pts_per_game": _as_float(comp.get("ppg")),
+                "ast_per_game": _as_float(comp.get("apg")),
+                "treb_per_game": _as_float(comp.get("rpg")),
                 "distance": float(comp["historical_distance"]),
                 "subtitle": f"{comp['team']} \u00b7 {comp.get('cls', '')}".strip(),
                 "profile": _current_compare_profile_from_row(comp),
@@ -4818,7 +4818,7 @@ app_ui = ui.page_fluid(
             .similarity-beta-table-head,
             .similarity-beta-row {
                 display:grid;
-                grid-template-columns:32px 42px minmax(0, 1fr) 48px 48px 58px;
+                grid-template-columns:32px 42px minmax(0, 1fr) 48px 48px 48px;
                 gap:10px;
                 align-items:center;
             }
@@ -4877,15 +4877,11 @@ app_ui = ui.page_fluid(
                 text-overflow:ellipsis;
                 white-space:nowrap;
             }
-            .similarity-beta-stat,
-            .similarity-beta-distance {
+            .similarity-beta-stat {
                 color:var(--ink-2);
                 font-family:var(--mono);
                 font-size:12px;
                 text-align:right;
-            }
-            .similarity-beta-distance {
-                color:#f0cb67;
             }
             .similarity-beta-empty {
                 padding:18px 0 2px;
@@ -4952,11 +4948,7 @@ app_ui = ui.page_fluid(
                 }
                 .similarity-beta-table-head,
                 .similarity-beta-row {
-                    grid-template-columns:28px 38px minmax(0, 1fr) 42px 42px;
-                }
-                .similarity-beta-table-head div:last-child,
-                .similarity-beta-distance {
-                    display:none;
+                    grid-template-columns:28px 38px minmax(0, 1fr) 38px 38px 38px;
                 }
             }
 
