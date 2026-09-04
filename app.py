@@ -1682,6 +1682,8 @@ def _format_compare_value(stat_key: str, value: object) -> str:
     if stat_key in SIMILARITY_COMPARE_PERCENT_KEYS:
         return f"{num * 100:.1f}%"
     if stat_key in SIMILARITY_COMPARE_RAW_PERCENT_KEYS:
+        if abs(num) <= 1:
+            return f"{num * 100:.1f}"
         return f"{num:.1f}"
     if stat_key == "pc":
         return f"{num:.2f}"
