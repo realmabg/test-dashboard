@@ -47,7 +47,17 @@ HISTORICAL_TABLE_LIMIT = 25
 HISTORICAL_CURRENT_COMP_LIMIT = 5
 HISTORICAL_CURRENT_COMP_MIN_MPG = 10.0
 HISTORICAL_BETA_ARCHETYPES = ["PG / Combo", "2-4 Wing", "F/C Stretch"]
-LIVE_BUILD_STAMP = "TEST BUILD 08-28-2026 · 05deefa"
+SIMILARITY_BETA_IDEALS = [
+    {"player_name": "Nique Clifford", "team": "Colorado St.", "year": 2024},
+    {"player_name": "Bowen Born", "team": "Northern Iowa", "year": 2024},
+    {"player_name": "Tyler McGhie", "team": "UC San Diego", "year": 2024},
+]
+SIMILARITY_BETA_MOVEMENT = [
+    [1, 0, -2, 2, -1],
+    [0, 2, -1, 1, 0],
+    [2, -1, 0, -2, 1],
+]
+LIVE_BUILD_STAMP = "TEST BUILD 09-03-2026 · similarity-beta"
 
 
 def resolve_current_d2_schema_path():
@@ -1206,6 +1216,154 @@ def historical_slider_range(column: str, step: float):
     return (float(lo), float(hi))
 
 
+def similarity_beta_ideal_row(ideal):
+    if HISTORICAL_PLAYER_INDEX.empty:
+        return None
+    player_key = normalize_lookup_key(ideal.get("player_name"))
+    team_key = normalize_lookup_key(ideal.get("team"))
+    year = _as_float(ideal.get("year"))
+    rows = HISTORICAL_PLAYER_INDEX[
+        HISTORICAL_PLAYER_INDEX["player_name"].map(normalize_lookup_key).eq(player_key)
+    ].copy()
+    if np.isfinite(year) and "year" in rows.columns:
+        rows = rows[pd.to_numeric(rows["year"], errors="coerce").eq(year)].copy()
+    exact = rows[rows["team"].map(normalize_lookup_key).eq(team_key)].copy()
+    if not exact.empty:
+        return exact.iloc[0]
+    if not rows.empty:
+        return rows.iloc[0]
+    return None
+
+
+def similarity_beta_metric(row, key, fallback="—"):
+    if row is None:
+        return fallback
+    if key == "height_inches":
+        return _format_compare_value(key, row.get(key))
+    num = _as_float(row.get(key))
+    if not np.isfinite(num):
+        return fallback
+    return f"{num:.1f}"
+
+
+def similarity_beta_comp_metric(comp, key):
+    num = _as_float(comp.get(key))
+    if not np.isfinite(num):
+        return "—"
+    return f"{num:.1f}"
+
+
+def similarity_beta_movement(board_index: int, rank_index: int):
+    board = SIMILARITY_BETA_MOVEMENT[board_index % len(SIMILARITY_BETA_MOVEMENT)]
+    delta = board[rank_index % len(board)]
+    if delta > 0:
+        return ("up", f"↑ {delta}")
+    if delta < 0:
+        return ("down", f"↓ {abs(delta)}")
+    return ("flat", "—")
+
+
+def similarity_beta_card(ideal, board_index: int):
+    row = similarity_beta_ideal_row(ideal)
+    comps = historical_current_comps_for_player(
+        row,
+        n_comp=HISTORICAL_CURRENT_COMP_LIMIT,
+        exclude_low_sample=True,
+    ) if row is not None else []
+    ideal_name = str(ideal.get("player_name", "Ideal Player"))
+    ideal_meta = historical_profile_subtitle(row) if row is not None else ""
+    if not ideal_meta:
+        ideal_bits = [
+            str(ideal.get("team", "")),
+            str(int(ideal.get("year"))) if np.isfinite(_as_float(ideal.get("year"))) else "",
+        ]
+        ideal_meta = " · ".join([bit for bit in ideal_bits if bit])
+    rows = []
+    for i, comp in enumerate(comps):
+        movement_class, movement_label = similarity_beta_movement(board_index, i)
+        rows.append(
+            ui.div(
+                {"class": "similarity-beta-row"},
+                ui.div(str(comp["rank"]), class_="similarity-beta-rank"),
+                ui.div(movement_label, class_=f"similarity-beta-move {movement_class}"),
+                ui.div(
+                    ui.div(comp["name"], class_="similarity-beta-player"),
+                    ui.div(
+                        " · ".join([bit for bit in [comp.get("team", ""), comp.get("conf", ""), comp.get("cls", "")] if bit]),
+                        class_="similarity-beta-team",
+                    ),
+                    class_="similarity-beta-player-cell",
+                ),
+                ui.div(similarity_beta_comp_metric(comp, "pts_per_game"), class_="similarity-beta-stat"),
+                ui.div(similarity_beta_comp_metric(comp, "treb_per_game"), class_="similarity-beta-stat"),
+                ui.div(f"{comp['distance']:.2f}", class_="similarity-beta-distance"),
+            )
+        )
+    if not rows:
+        rows.append(
+            ui.div(
+                "No current-player matches are available for this ideal player yet.",
+                class_="similarity-beta-empty",
+            )
+        )
+
+    return ui.div(
+        {"class": "similarity-beta-card"},
+        ui.div(
+            {"class": "similarity-beta-card-head"},
+            ui.div(
+                ui.div(ideal_name, class_="similarity-beta-ideal-name"),
+                ui.div(ideal_meta, class_="similarity-beta-ideal-meta"),
+            ),
+            ui.div("Ideal", class_="similarity-beta-pill"),
+        ),
+        ui.div(
+            {"class": "similarity-beta-ideal-stats"},
+            ui.div(ui.span("HT"), ui.b(similarity_beta_metric(row, "height_inches"))),
+            ui.div(ui.span("PPG"), ui.b(similarity_beta_metric(row, "pts_per_game"))),
+            ui.div(ui.span("APG"), ui.b(similarity_beta_metric(row, "ast_per_game"))),
+            ui.div(ui.span("RPG"), ui.b(similarity_beta_metric(row, "treb_per_game"))),
+        ),
+        ui.div(
+            {"class": "similarity-beta-table-head"},
+            ui.div("#"),
+            ui.div("Δ"),
+            ui.div("Current player"),
+            ui.div("PPG"),
+            ui.div("RPG"),
+            ui.div("Dist."),
+        ),
+        ui.div({"class": "similarity-beta-table"}, *rows),
+    )
+
+
+def make_similarity_beta_tab():
+    return ui.div(
+        {"id": "sim-beta-tab", "class": "tab-panel"},
+        ui.div(
+            {"class": "similarity-beta-shell"},
+            ui.div(
+                {"class": "similarity-beta-topbar"},
+                ui.div(
+                    ui.div("Similarity Beta", class_="similarity-beta-title"),
+                    ui.div(
+                        "Pick a historical ideal player, then rank the current D-I pool by closest statistical profile.",
+                        class_="similarity-beta-subtitle",
+                    ),
+                ),
+                ui.div("Movement = change since last refresh", class_="similarity-beta-refresh-note"),
+            ),
+            ui.div(
+                {"class": "similarity-beta-grid"},
+                *[
+                    similarity_beta_card(ideal, i)
+                    for i, ideal in enumerate(SIMILARITY_BETA_IDEALS)
+                ],
+            ),
+        ),
+    )
+
+
 def make_historical_beta_tab():
     height_min, height_max = historical_slider_range("height_inches", 1)
     mpg_min, mpg_max = historical_slider_range("mins_per_game", 0.5)
@@ -1871,6 +2029,10 @@ def historical_current_comps_for_player(
                 "cls": comp.get("cls", ""),
                 "pos": comp.get("pos", ""),
                 "archetype": archetype_label(comp.get("primary_archetype", "")),
+                "mins_per_game": _as_float(comp.get("mins_per_game")),
+                "pts_per_game": _as_float(comp.get("pts_per_game")),
+                "ast_per_game": _as_float(comp.get("ast_per_game")),
+                "treb_per_game": _as_float(comp.get("treb_per_game")),
                 "distance": float(comp["historical_distance"]),
                 "subtitle": f"{comp['team']} \u00b7 {comp.get('cls', '')}".strip(),
                 "profile": _current_compare_profile_from_row(comp),
@@ -3610,6 +3772,7 @@ app_ui = ui.page_fluid(
             .tab-btn.active-wl { color:#7cc47a;         border-bottom-color:#7cc47a; }
             .tab-btn.active-ucsd { color:#8a5f0e;       border-bottom-color:#8a5f0e; }
             .tab-btn.active-hist { color:#c9d6f0;       border-bottom-color:#c9d6f0; }
+            .tab-btn.active-sim-beta { color:#f0cb67;   border-bottom-color:#f0cb67; }
             .tab-sep { width:1px; height:16px; background:var(--rule-2); margin:0 4px; }
             .build-stamp {
                 display:inline-flex; align-items:center; width:fit-content;
@@ -4209,6 +4372,220 @@ app_ui = ui.page_fluid(
                 text-transform:uppercase; border-radius:3px;
                 padding:2px 7px; margin-left:6px;
                 background:var(--bg-2); color:var(--ink-2); vertical-align:middle;
+            }
+
+            /* ── Similarity beta tab ── */
+            .similarity-beta-shell {
+                padding:26px 28px 34px;
+                display:flex;
+                flex-direction:column;
+                gap:18px;
+            }
+            .similarity-beta-topbar {
+                display:flex;
+                justify-content:space-between;
+                align-items:flex-end;
+                gap:22px;
+                border:1px solid var(--rule);
+                background:rgba(19,27,41,.72);
+                padding:22px 24px;
+            }
+            .similarity-beta-title {
+                color:var(--ink);
+                font-family:var(--serif);
+                font-size:44px;
+                line-height:1;
+            }
+            .similarity-beta-subtitle {
+                margin-top:8px;
+                color:var(--ink-3);
+                font-family:var(--sans);
+                font-size:13px;
+                max-width:640px;
+            }
+            .similarity-beta-refresh-note {
+                color:#f0cb67;
+                font-family:var(--mono);
+                font-size:11px;
+                text-transform:uppercase;
+                letter-spacing:.10em;
+                white-space:nowrap;
+            }
+            .similarity-beta-grid {
+                display:grid;
+                grid-template-columns:repeat(3, minmax(0, 1fr));
+                gap:16px;
+            }
+            .similarity-beta-card {
+                min-width:0;
+                border:1px solid var(--rule);
+                background:rgba(19,27,41,.72);
+                padding:18px;
+            }
+            .similarity-beta-card-head {
+                display:flex;
+                justify-content:space-between;
+                align-items:flex-start;
+                gap:14px;
+                padding-bottom:14px;
+                border-bottom:1px solid rgba(89,113,154,.24);
+            }
+            .similarity-beta-ideal-name {
+                color:var(--ink);
+                font-family:var(--serif);
+                font-size:28px;
+                line-height:1.05;
+            }
+            .similarity-beta-ideal-meta,
+            .similarity-beta-team {
+                margin-top:5px;
+                color:var(--ink-3);
+                font-family:var(--mono);
+                font-size:11px;
+                line-height:1.35;
+            }
+            .similarity-beta-pill {
+                flex:0 0 auto;
+                color:#f0cb67;
+                border:1px solid rgba(240,203,103,.44);
+                background:rgba(240,203,103,.08);
+                border-radius:999px;
+                padding:5px 8px;
+                font-family:var(--mono);
+                font-size:10px;
+                font-weight:700;
+                letter-spacing:.10em;
+                text-transform:uppercase;
+            }
+            .similarity-beta-ideal-stats {
+                display:grid;
+                grid-template-columns:repeat(4, minmax(0, 1fr));
+                gap:10px;
+                margin:14px 0 16px;
+            }
+            .similarity-beta-ideal-stats div {
+                border:1px solid rgba(89,113,154,.24);
+                background:rgba(10,16,27,.35);
+                padding:9px 10px;
+                min-width:0;
+            }
+            .similarity-beta-ideal-stats span {
+                display:block;
+                color:var(--ink-3);
+                font-family:var(--mono);
+                font-size:10px;
+                letter-spacing:.08em;
+                text-transform:uppercase;
+            }
+            .similarity-beta-ideal-stats b {
+                display:block;
+                margin-top:4px;
+                color:var(--ink);
+                font-family:var(--sans);
+                font-size:17px;
+                font-weight:700;
+            }
+            .similarity-beta-table-head,
+            .similarity-beta-row {
+                display:grid;
+                grid-template-columns:32px 42px minmax(0, 1fr) 48px 48px 58px;
+                gap:10px;
+                align-items:center;
+            }
+            .similarity-beta-table-head {
+                color:var(--ink-2);
+                font-family:var(--sans);
+                font-size:10px;
+                font-weight:700;
+                letter-spacing:.10em;
+                text-transform:uppercase;
+                padding-bottom:8px;
+                border-bottom:1px solid rgba(89,113,154,.24);
+            }
+            .similarity-beta-table {
+                display:grid;
+                gap:0;
+            }
+            .similarity-beta-row {
+                min-height:64px;
+                border-bottom:1px solid rgba(89,113,154,.16);
+            }
+            .similarity-beta-row:last-child {
+                border-bottom:none;
+            }
+            .similarity-beta-rank {
+                color:var(--ink);
+                font-family:var(--serif);
+                font-size:24px;
+                line-height:1;
+            }
+            .similarity-beta-move {
+                font-family:var(--mono);
+                font-size:13px;
+                font-weight:700;
+            }
+            .similarity-beta-move.up { color:#7cc47a; }
+            .similarity-beta-move.down { color:#e06f5f; }
+            .similarity-beta-move.flat { color:var(--ink-3); }
+            .similarity-beta-player-cell {
+                min-width:0;
+            }
+            .similarity-beta-player {
+                color:var(--ink);
+                font-family:var(--sans);
+                font-size:17px;
+                line-height:1.18;
+                overflow:hidden;
+                text-overflow:ellipsis;
+                white-space:nowrap;
+            }
+            .similarity-beta-stat,
+            .similarity-beta-distance {
+                color:var(--ink-2);
+                font-family:var(--mono);
+                font-size:12px;
+                text-align:right;
+            }
+            .similarity-beta-distance {
+                color:#f0cb67;
+            }
+            .similarity-beta-empty {
+                padding:18px 0 2px;
+                color:var(--ink-3);
+                font-family:var(--sans);
+                font-size:13px;
+            }
+            @media (max-width: 1180px) {
+                .similarity-beta-grid {
+                    grid-template-columns:1fr;
+                }
+            }
+            @media (max-width: 760px) {
+                .similarity-beta-shell {
+                    padding:18px 16px 24px;
+                }
+                .similarity-beta-topbar {
+                    flex-direction:column;
+                    align-items:flex-start;
+                    padding:18px;
+                }
+                .similarity-beta-title {
+                    font-size:34px;
+                }
+                .similarity-beta-refresh-note {
+                    white-space:normal;
+                }
+                .similarity-beta-card {
+                    padding:14px;
+                }
+                .similarity-beta-table-head,
+                .similarity-beta-row {
+                    grid-template-columns:28px 38px minmax(0, 1fr) 42px 42px;
+                }
+                .similarity-beta-table-head div:last-child,
+                .similarity-beta-distance {
+                    display:none;
+                }
             }
 
             /* ── Historical beta tab ── */
@@ -4946,7 +5323,7 @@ app_ui = ui.page_fluid(
                     p.classList.remove('active');
                 });
                 document.querySelectorAll('.tab-btn').forEach(function(b) {
-                    b.classList.remove('active-d1','active-d2','active-d3','active-info','active-wl','active-ucsd','active-hist');
+                    b.classList.remove('active-d1','active-d2','active-d3','active-info','active-wl','active-ucsd','active-hist','active-sim-beta');
                 });
                 document.getElementById(tab+'-tab').classList.add('active');
                 document.getElementById('btn-'+tab).classList.add('active-'+tab);
@@ -5074,6 +5451,9 @@ app_ui = ui.page_fluid(
                ui.tags.button("Division III", id="btn-d3", class_="tab-btn",
                               onclick="switchTab('d3')"),
                ui.div({"class": "tab-sep"}),
+               ui.tags.button("Similarity Beta", id="btn-sim-beta", class_="tab-btn",
+                              onclick="switchTab('sim-beta')"),
+               ui.div({"class": "tab-sep"}),
                ui.tags.button("Historical Players (beta)", id="btn-hist", class_="tab-btn",
                               onclick="switchTab('hist')"),
                ui.div({"class": "tab-sep"}),
@@ -5104,6 +5484,8 @@ app_ui = ui.page_fluid(
                    ui.div({"class": "body-grid"},
                           make_sidebar("d3", d3_df, d3_conferences),
                           make_plot_area("d3"))),
+
+            make_similarity_beta_tab(),
 
             make_historical_beta_tab(),
 
