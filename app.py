@@ -333,8 +333,8 @@ def build_historical_current_pool():
         if row_key in current_players.columns:
             current_players[compare_key] = pd.to_numeric(current_players[row_key], errors="coerce")
     current_players["height_inches"] = pd.to_numeric(current_players.get("heightIn"), errors="coerce")
-    score_cols = [f"{category_key}_score" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES]
-    grade_cols = [f"{category_key}_grade" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES]
+    score_cols = [f"{category_key}_score" for category_key, _label in LEGACY_SIMILARITY_SCORE_CATEGORIES]
+    grade_cols = [f"{category_key}_grade" for category_key, _label in LEGACY_SIMILARITY_SCORE_CATEGORIES]
     for col in [*score_cols, *grade_cols]:
         if col not in current_players.columns:
             current_players[col] = np.nan
@@ -1650,24 +1650,93 @@ SIMILARITY_HISTORICAL_POOL_LABELS = {
     "all": "All",
     "big_west_next_year": "Played in Big West next year",
 }
+LEGACY_SIMILARITY_SCORE_CATEGORIES = [
+    ("workload", "Workload"),
+    ("shot_style", "Shot Style"),
+    ("spacing", "Spacing"),
+    ("rim_finishing", "Rim / Finishing"),
+    ("rebounding", "Rebounding"),
+    ("defense", "Defense"),
+    ("ballhandling", "Ballhandling"),
+    ("height", "Height"),
+]
 SIMILARITY_COMPARE_CATEGORIES = [
-    ("workload", "Workload", [("usg", "USG%"), ("3P_per_100_team_pos", "3PA/100 poss"), ("assisted_fg_pct", "AST'D FG%")]),
-    ("shot_style", "Shot Style", [("three_share", "3PA share"), ("rim_share", "Rim share")]),
-    ("spacing", "Spacing", [("3P_pct", "3PT%"), ("three_assisted_pct", "3PT ast%")]),
-    ("rim_finishing", "Rim / Finishing", [("rim_pct", "Rim%"), ("FTR", "FTR"), ("rim_assisted_pct", "Rim ast%")]),
-    ("rebounding", "Rebounding", [("ORB_pct", "ORB%"), ("DRB_pct", "DRB%")]),
-    ("defense", "Defense", [("Blk_pct", "BLK%"), ("Stl_pct", "STL%"), ("personal_fouls_per_40", "PF/40"), ("stops_per_40", "Stops/40")]),
-    ("ballhandling", "Ballhandling", [("AST_pct", "AST%"), ("AST_TOV", "AST/TO"), ("TOV_pct", "TOV%")]),
-    ("height", "Height", [("height_inches", "Height")]),
+    (
+        "profile_workload",
+        "Tier 1 · Height / Shot Type / Workload",
+        [
+            ("height_inches", "Height"),
+            ("rim_share", "Rim shot share"),
+            ("mid_share", "Midrange shot share"),
+            ("three_share", "3PT shot share"),
+            ("dunk_share", "Dunk share"),
+            ("usg", "USG%"),
+            ("FTR", "FTR"),
+        ],
+    ),
+    (
+        "shot_creation",
+        "Tier 2 · How They Take Shots",
+        [
+            ("assisted_fg_pct", "Total assisted FG%"),
+            ("three_assisted_pct", "3PT assisted%"),
+            ("rim_assisted_pct", "Rim/dunk assisted%"),
+        ],
+    ),
+    (
+        "ballhandling",
+        "Tier 3 · Ballhandling",
+        [
+            ("AST_pct", "AST%"),
+            ("TOV_pct", "TOV%"),
+            ("AST_TOV", "AST/TO"),
+        ],
+    ),
+    (
+        "efficiency",
+        "Tier 4 · Efficiency",
+        [
+            ("eFG", "eFG%"),
+            ("FT_pct", "FT%"),
+            ("3P_pct", "3PT%"),
+            ("rim_pct", "Rim%"),
+            ("mid_pct", "Midrange%"),
+            ("dunk_pct", "Dunk%"),
+        ],
+    ),
+    (
+        "rebounding",
+        "Tier 5 · Rebounding",
+        [
+            ("ORB_pct", "ORB%"),
+            ("DRB_pct", "DRB%"),
+        ],
+    ),
+    (
+        "defense",
+        "Tier 6 · Defense",
+        [
+            ("Blk_pct", "BLK%"),
+            ("Stl_pct", "STL%"),
+            ("stops_per_40", "Stops/40"),
+            ("personal_fouls_per_40", "PF/40"),
+        ],
+    ),
 ]
 SIMILARITY_COMPARE_PERCENT_KEYS = {
     "assisted_fg_pct",
     "three_share",
     "rim_share",
+    "mid_share",
+    "dunk_share",
     "three_assisted_pct",
     "rim_assisted_pct",
+    "eFG",
+    "FT_pct",
     "3P_pct",
     "rim_pct",
+    "mid_pct",
+    "dunk_pct",
 }
 SIMILARITY_COMPARE_RAW_PERCENT_KEYS = {
     "usg",
@@ -1739,7 +1808,9 @@ def _format_compare_value(stat_key: str, value: object) -> str:
     if stat_key == "height_inches":
         return height_str(int(round(num)))
     if stat_key in SIMILARITY_COMPARE_PERCENT_KEYS:
-        return f"{num * 100:.1f}%"
+        if abs(num) <= 1:
+            return f"{num * 100:.1f}%"
+        return f"{num:.1f}%"
     if stat_key in SIMILARITY_COMPARE_RAW_PERCENT_KEYS:
         if abs(num) <= 1:
             return f"{num * 100:.1f}"
@@ -1778,10 +1849,10 @@ CURRENT_TO_COMPARE_KEY = {
     "TOV_pct": "tov_pct",
 }
 HISTORICAL_COMPARE_SCORE_COLUMNS = [
-    f"{category_key}_score" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES
+    f"{category_key}_score" for category_key, _label in LEGACY_SIMILARITY_SCORE_CATEGORIES
 ]
 HISTORICAL_COMPARE_GRADE_COLUMNS = [
-    f"{category_key}_grade" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES
+    f"{category_key}_grade" for category_key, _label in LEGACY_SIMILARITY_SCORE_CATEGORIES
 ]
 HISTORICAL_COMPARE_FALLBACK_COLUMNS = [*CURRENT_TO_COMPARE_KEY.keys(), "height_inches"]
 
@@ -2045,7 +2116,7 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False):
         ("BPM", f"{_as_float(row.get('bpm')):.1f}" if pd.notna(_as_float(row.get("bpm"))) else "—", True),
     ]
     grade_rows = []
-    for category_key, category_label, _stats in SIMILARITY_COMPARE_CATEGORIES:
+    for category_key, category_label in LEGACY_SIMILARITY_SCORE_CATEGORIES:
         grade_value = _as_float(source_profile.get(f"{category_key}_grade"))
         if not np.isfinite(grade_value):
             grade_value = 0.0
