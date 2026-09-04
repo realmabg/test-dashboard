@@ -1338,7 +1338,11 @@ def similarity_beta_rows(row, comps, board_index: int, *, compact: bool = True):
 
 
 def similarity_beta_ideal_header(row, ideal):
-    ideal_name = str(ideal.get("player_name", "Ideal Player"))
+    ideal_name = str(
+        (row.get("player_name", "") if row is not None else "")
+        or ideal.get("player_name", "")
+        or "Ideal Player"
+    )
     ideal_meta = historical_profile_subtitle(row) if row is not None else ""
     if not ideal_meta:
         ideal_bits = [
