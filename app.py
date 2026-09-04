@@ -57,6 +57,7 @@ SIMILARITY_BETA_MOVEMENT = [
     [0, 2, -1, 1, 0],
     [2, -1, 0, -2, 1],
 ]
+HISTORICAL_CURRENT_COMP_CACHE = {}
 LIVE_BUILD_STAMP = "TEST BUILD 09-03-2026 · triton-tracker"
 
 
@@ -2138,11 +2139,6 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False, trit
         "? 'Remove from Triton Tracker' : 'Add to Triton Tracker';"
         f"Shiny.setInputValue('toggle_triton_tracker',{json.dumps(row_id)},{{priority:'event'}})"
     )
-    comp_cards = historical_current_comp_cards(
-        row,
-        exclude_low_sample=exclude_low_sample,
-        open_mode="compare",
-    )
     pc = ARCHETYPE_COLOR.get(str(row.get("archetype", "") or ""), POS_COLOR.get(str(row.get("pos", "") or ""), "#888"))
     meta_badges = []
     for value in (
@@ -2263,10 +2259,7 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False, trit
                         class_="historical-profile-comps-controls",
                     ),
                 ),
-                ui.div({"class": "historical-comp-list"}, *comp_cards) if comp_cards else ui.div(
-                    "No current-player comps are available for this profile yet.",
-                    class_="qual-note",
-                ),
+                ui.output_ui("hist_modal_current_comps_ui"),
                 class_="arch-score-panel historical-profile-comps",
             ),
         ),
@@ -2287,6 +2280,16 @@ def historical_current_comps_for_player(
     n_comp: int = HISTORICAL_CURRENT_COMP_LIMIT,
     exclude_low_sample: bool = False,
 ):
+    cache_key = (
+        str(row.get("season_player_id", "") or "").strip(),
+        int(n_comp),
+        bool(exclude_low_sample),
+    )
+    if cache_key[0]:
+        cached = HISTORICAL_CURRENT_COMP_CACHE.get(cache_key)
+        if cached is not None:
+            return [dict(comp) for comp in cached]
+
     if HISTORICAL_CURRENT_POOL.empty:
         return []
     pool = HISTORICAL_CURRENT_POOL.copy()
@@ -2338,6 +2341,8 @@ def historical_current_comps_for_player(
                 "profile": _current_compare_profile_from_row(comp),
             }
         )
+    if cache_key[0]:
+        HISTORICAL_CURRENT_COMP_CACHE[cache_key] = [dict(comp) for comp in comps]
     return comps
 
 
@@ -7172,21 +7177,25 @@ def server(input, output, session):
     @reactive.effect
     @reactive.event(input.hist_modal_exclude_low_sample_current)
     def _hist_modal_exclude_low_sample_current():
+        value = bool(input.hist_modal_exclude_low_sample_current())
+        hist_modal_exclude_low_sample_state.set(value)
+
+    @output
+    @render.ui
+    def hist_modal_current_comps_ui():
         row_id = str(hist_modal_selected.get() or "").strip()
         source_row = historical_row_by_id(row_id)
         if source_row is None:
-            return
-        value = bool(input.hist_modal_exclude_low_sample_current())
-        if hist_modal_exclude_low_sample_state.get() == value:
-            return
-        hist_modal_exclude_low_sample_state.set(value)
-        ui.modal_show(
-            make_historical_profile_modal(
-                source_row,
-                exclude_low_sample=value,
-                triton_tracker_ids=triton_tracker_ids.get(),
-            )
+            return ui.div("Choose a historical player to load current-player comps.", class_="qual-note")
+        exclude_low_sample = bool(input.hist_modal_exclude_low_sample_current())
+        cards = historical_current_comp_cards(
+            source_row,
+            exclude_low_sample=exclude_low_sample,
+            open_mode="compare",
         )
+        if not cards:
+            return ui.div("No current-player comps are available for this profile yet.", class_="qual-note")
+        return ui.div({"class": "historical-comp-list"}, *cards)
 
     @reactive.effect
     @reactive.event(input.hist_open_compare)
