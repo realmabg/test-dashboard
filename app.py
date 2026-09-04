@@ -1747,6 +1747,10 @@ SIMILARITY_COMPARE_RAW_PERCENT_KEYS = {
     "Blk_pct",
     "Stl_pct",
 }
+SIMILARITY_COMPARE_MIXED_SCALE_PERCENT_KEYS = {
+    *SIMILARITY_COMPARE_PERCENT_KEYS,
+    "usg",
+}
 SIMILARITY_TIER_WEIGHTS = {
     "profile_workload": 6 / 21,
     "shot_creation": 5 / 21,
@@ -1812,9 +1816,9 @@ def _format_compare_value(stat_key: str, value: object) -> str:
             return f"{num * 100:.1f}%"
         return f"{num:.1f}%"
     if stat_key in SIMILARITY_COMPARE_RAW_PERCENT_KEYS:
-        if abs(num) <= 1:
-            return f"{num * 100:.1f}"
-        return f"{num:.1f}"
+        if stat_key in SIMILARITY_COMPARE_MIXED_SCALE_PERCENT_KEYS and abs(num) <= 1:
+            num *= 100
+        return f"{num:.1f}%"
     if stat_key == "pc":
         return f"{num:.2f}"
     if stat_key in {"AST_TOV", "FTR", "3P_per_100_team_pos", "personal_fouls_per_40", "stops_per_40"}:
@@ -1861,7 +1865,7 @@ def _similarity_model_value(stat_key: str, value: object):
     num = _as_float(value)
     if not np.isfinite(num):
         return np.nan
-    if stat_key in SIMILARITY_COMPARE_RAW_PERCENT_KEYS and abs(num) <= 1:
+    if stat_key in SIMILARITY_COMPARE_MIXED_SCALE_PERCENT_KEYS and abs(num) <= 1:
         return num * 100
     return num
 
