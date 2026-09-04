@@ -1319,10 +1319,10 @@ def similarity_beta_card(ideal, board_index: int):
         ),
         ui.div(
             {"class": "similarity-beta-ideal-stats"},
-            ui.div(ui.span("HT"), ui.b(similarity_beta_metric(row, "height_inches"))),
-            ui.div(ui.span("PPG"), ui.b(similarity_beta_metric(row, "pts_per_game"))),
-            ui.div(ui.span("APG"), ui.b(similarity_beta_metric(row, "ast_per_game"))),
-            ui.div(ui.span("RPG"), ui.b(similarity_beta_metric(row, "treb_per_game"))),
+            ui.div(ui.span("HT"), ui.tags.b(similarity_beta_metric(row, "height_inches"))),
+            ui.div(ui.span("PPG"), ui.tags.b(similarity_beta_metric(row, "pts_per_game"))),
+            ui.div(ui.span("APG"), ui.tags.b(similarity_beta_metric(row, "ast_per_game"))),
+            ui.div(ui.span("RPG"), ui.tags.b(similarity_beta_metric(row, "treb_per_game"))),
         ),
         ui.div(
             {"class": "similarity-beta-table-head"},
