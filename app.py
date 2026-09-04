@@ -2141,10 +2141,7 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False, trit
     tracker_label = "Remove from Triton Tracker" if is_tracked else "Add to Triton Tracker"
     tracker_class = "triton-tracker-toggle is-tracked" if is_tracked else "triton-tracker-toggle"
     tracker_onclick = (
-        "this.classList.toggle('is-tracked');"
-        "this.textContent=this.classList.contains('is-tracked')"
-        "? 'Remove from Triton Tracker' : 'Add to Triton Tracker';"
-        f"Shiny.setInputValue('toggle_triton_tracker',{json.dumps(row_id)},{{priority:'event'}})"
+        f"window.ucsdToggleTritonTracker && window.ucsdToggleTritonTracker({json.dumps(row_id)}, this);"
     )
     pc = ARCHETYPE_COLOR.get(str(row.get("archetype", "") or ""), POS_COLOR.get(str(row.get("pos", "") or ""), "#888"))
     meta_badges = []
@@ -5737,6 +5734,9 @@ app_ui = ui.page_fluid(
                 document.getElementById('btn-'+tab).classList.add('active-'+tab);
                 if (window.Shiny && window.Shiny.setInputValue) {
                     window.Shiny.setInputValue('active_tab', tab, {priority: 'event'});
+                    if (tab === 'sim-beta' && window.ucsdSyncTritonTracker) {
+                        window.ucsdSyncTritonTracker(true);
+                    }
                     window.Shiny.setInputValue(
                         tab === 'sim-beta' ? 'triton_tracker_visible' : 'triton_tracker_hidden',
                         Date.now(),
@@ -5833,23 +5833,52 @@ app_ui = ui.page_fluid(
         ui.tags.script(f"""
             (function() {{
                 var KEY = {json.dumps(TRITON_TRACKER_STORAGE_KEY)};
-                function restoreTritonTracker() {{
-                    if (!window.Shiny || !window.Shiny.setInputValue || !document.body) return;
-                    if (document.body.dataset.ucsdTritonTrackerRestored === '1') return;
-                    document.body.dataset.ucsdTritonTrackerRestored = '1';
+                function readIds() {{
                     var ids = [];
                     try {{
                         var raw = localStorage.getItem(KEY);
                         if (raw) {{
                             var parsed = JSON.parse(raw);
                             if (Array.isArray(parsed)) {{
-                                ids = parsed.filter(function(v) {{ return typeof v === 'string'; }});
+                                ids = parsed.filter(function(v) {{ return typeof v === 'string' && v.trim(); }});
                             }}
                         }}
                     }} catch (err) {{ ids = []; }}
+                    return ids;
+                }}
+                function writeIds(ids) {{
+                    try {{
+                        localStorage.setItem(KEY, JSON.stringify(ids));
+                    }} catch (err) {{}}
+                }}
+                function syncTritonTracker(force) {{
+                    if (!window.Shiny || !window.Shiny.setInputValue || !document.body) return;
+                    if (!force && document.body.dataset.ucsdTritonTrackerRestored === '1') return;
+                    document.body.dataset.ucsdTritonTrackerRestored = '1';
+                    var ids = readIds();
                     window.Shiny.setInputValue('triton_tracker_restore', {{ids: ids}}, {{priority: 'event'}});
                 }}
-                document.addEventListener('shiny:connected', restoreTritonTracker);
+                window.ucsdSyncTritonTracker = syncTritonTracker;
+                window.ucsdToggleTritonTracker = function(id, button) {{
+                    if (!id) return;
+                    var ids = readIds();
+                    var idx = ids.indexOf(id);
+                    var isTracked = idx === -1;
+                    if (isTracked) {{
+                        ids.push(id);
+                    }} else {{
+                        ids.splice(idx, 1);
+                    }}
+                    writeIds(ids);
+                    if (button) {{
+                        button.classList.toggle('is-tracked', isTracked);
+                        button.textContent = isTracked ? 'Remove from Triton Tracker' : 'Add to Triton Tracker';
+                    }}
+                    if (window.Shiny && window.Shiny.setInputValue) {{
+                        window.Shiny.setInputValue('triton_tracker_restore', {{ids: ids}}, {{priority: 'event'}});
+                    }}
+                }};
+                document.addEventListener('shiny:connected', function() {{ syncTritonTracker(false); }});
                 var tries = 0;
                 var timer = window.setInterval(function() {{
                     if (document.body && document.body.dataset.ucsdTritonTrackerRestored === '1') {{
@@ -5859,7 +5888,7 @@ app_ui = ui.page_fluid(
                     var app = window.Shiny && window.Shiny.shinyapp;
                     var live = app && (typeof app.isConnected !== 'function' || app.isConnected());
                     if (document.body && live && window.Shiny.setInputValue) {{
-                        restoreTritonTracker();
+                        syncTritonTracker(false);
                         window.clearInterval(timer);
                         return;
                     }}
