@@ -4784,7 +4784,7 @@ app_ui = ui.page_fluid(
             }
             .similarity-beta-grid {
                 display:grid;
-                grid-template-columns:repeat(auto-fit, minmax(430px, 1fr));
+                grid-template-columns:repeat(3, minmax(0, 1fr));
                 gap:16px;
             }
             .similarity-beta-card {
@@ -4966,10 +4966,13 @@ app_ui = ui.page_fluid(
             }
             @media (max-width: 1180px) {
                 .similarity-beta-grid {
-                    grid-template-columns:1fr;
+                    grid-template-columns:repeat(2, minmax(0, 1fr));
                 }
             }
             @media (max-width: 760px) {
+                .similarity-beta-grid {
+                    grid-template-columns:1fr;
+                }
                 .similarity-beta-shell {
                     padding:18px 16px 24px;
                 }
