@@ -47,7 +47,7 @@ HISTORICAL_TABLE_LIMIT = 25
 HISTORICAL_CURRENT_COMP_LIMIT = 5
 HISTORICAL_CURRENT_COMP_MIN_MPG = 10.0
 HISTORICAL_BETA_ARCHETYPES = ["PG / Combo", "2-4 Wing", "F/C Stretch"]
-SIMILARITY_BETA_IDEALS = [
+TRITON_TRACKER_DEFAULT_IDEALS = [
     {"player_name": "Hayden Gray", "team": "UC San Diego", "year": 2025},
     {"player_name": "Aniwaniwa Tait-Jones", "team": "UC San Diego", "year": 2025},
     {"player_name": "Tyler McGhie", "team": "UC San Diego", "year": 2025},
@@ -57,7 +57,7 @@ SIMILARITY_BETA_MOVEMENT = [
     [0, 2, -1, 1, 0],
     [2, -1, 0, -2, 1],
 ]
-LIVE_BUILD_STAMP = "TEST BUILD 09-03-2026 · similarity-beta"
+LIVE_BUILD_STAMP = "TEST BUILD 09-03-2026 · triton-tracker"
 
 
 def resolve_current_d2_schema_path():
@@ -1228,9 +1228,23 @@ def historical_slider_range(column: str, step: float):
     return (float(lo), float(hi))
 
 
+def historical_row_by_season_player_id(season_player_id):
+    if not season_player_id or HISTORICAL_PLAYER_INDEX.empty:
+        return None
+    rows = HISTORICAL_PLAYER_INDEX[
+        HISTORICAL_PLAYER_INDEX["season_player_id"].eq(str(season_player_id).strip())
+    ]
+    if rows.empty:
+        return None
+    return rows.iloc[0]
+
+
 def similarity_beta_ideal_row(ideal):
     if HISTORICAL_PLAYER_INDEX.empty:
         return None
+    row_id = str(ideal.get("season_player_id", "") or "").strip()
+    if row_id:
+        return historical_row_by_season_player_id(row_id)
     player_key = normalize_lookup_key(ideal.get("player_name"))
     team_key = normalize_lookup_key(ideal.get("team"))
     year = _as_float(ideal.get("year"))
@@ -1347,6 +1361,23 @@ def similarity_beta_table_head():
     )
 
 
+def triton_tracker_ideals(saved_ids):
+    ideals = list(TRITON_TRACKER_DEFAULT_IDEALS)
+    seen = set()
+    for ideal in ideals:
+        row = similarity_beta_ideal_row(ideal)
+        if row is not None:
+            seen.add(str(row.get("season_player_id", "") or "").strip())
+    for row_id in sorted({str(value).strip() for value in saved_ids if str(value).strip()}):
+        if row_id in seen:
+            continue
+        if historical_row_by_season_player_id(row_id) is None:
+            continue
+        ideals.append({"season_player_id": row_id})
+        seen.add(row_id)
+    return ideals
+
+
 def similarity_beta_card(ideal, board_index: int):
     row = similarity_beta_ideal_row(ideal)
     comps = historical_current_comps_for_player(
@@ -1356,6 +1387,7 @@ def similarity_beta_card(ideal, board_index: int):
     ) if row is not None else []
     ideal_name, ideal_meta = similarity_beta_ideal_header(row, ideal)
     rows = similarity_beta_rows(row, comps, board_index)
+    row_id = str(row.get("season_player_id", "") or "").strip() if row is not None else ""
 
     return ui.div(
         {"class": "similarity-beta-card"},
@@ -1379,23 +1411,22 @@ def similarity_beta_card(ideal, board_index: int):
         ui.tags.button(
             "View longer list",
             class_="similarity-beta-more",
-            onclick=f"Shiny.setInputValue('sim_beta_open_long_list',{board_index},{{priority:'event'}})",
+            onclick=f"Shiny.setInputValue('sim_beta_open_long_list',{json.dumps(row_id)},{{priority:'event'}})",
         ),
     )
 
 
-def make_similarity_beta_long_list_modal(board_index: int):
-    if board_index < 0 or board_index >= len(SIMILARITY_BETA_IDEALS):
+def make_similarity_beta_long_list_modal(source_id: str):
+    row = historical_row_by_season_player_id(source_id)
+    if row is None:
         return None
-    ideal = SIMILARITY_BETA_IDEALS[board_index]
-    row = similarity_beta_ideal_row(ideal)
     comps = historical_current_comps_for_player(
         row,
         n_comp=25,
         exclude_low_sample=True,
-    ) if row is not None else []
-    ideal_name, ideal_meta = similarity_beta_ideal_header(row, ideal)
-    rows = similarity_beta_rows(row, comps, board_index, compact=False)
+    )
+    ideal_name, ideal_meta = similarity_beta_ideal_header(row, {})
+    rows = similarity_beta_rows(row, comps, 0, compact=False)
     body = ui.div(
         {"class": "similarity-beta-long-list"},
         ui.div(
@@ -1417,26 +1448,31 @@ def make_similarity_beta_long_list_modal(board_index: int):
 def make_similarity_beta_tab():
     return ui.div(
         {"id": "sim-beta-tab", "class": "tab-panel"},
+        ui.output_ui("triton_tracker_ui"),
+    )
+
+
+def make_triton_tracker_content(saved_ids):
+    ideals = triton_tracker_ideals(saved_ids)
+    return ui.div(
+        {"class": "similarity-beta-shell"},
         ui.div(
-            {"class": "similarity-beta-shell"},
+            {"class": "similarity-beta-topbar"},
             ui.div(
-                {"class": "similarity-beta-topbar"},
+                ui.div("Triton Tracker", class_="similarity-beta-title"),
                 ui.div(
-                    ui.div("Similarity Beta", class_="similarity-beta-title"),
-                    ui.div(
-                        "Pick a historical ideal player, then rank the current D-I pool by the tier-weighted similarity model.",
-                        class_="similarity-beta-subtitle",
-                    ),
+                    "Save historical ideal players, then rank the current D-I pool by the tier-weighted similarity model.",
+                    class_="similarity-beta-subtitle",
                 ),
-                ui.div("Movement = change since last refresh", class_="similarity-beta-refresh-note"),
             ),
-            ui.div(
-                {"class": "similarity-beta-grid"},
-                *[
-                    similarity_beta_card(ideal, i)
-                    for i, ideal in enumerate(SIMILARITY_BETA_IDEALS)
-                ],
-            ),
+            ui.div("Movement = change since last refresh", class_="similarity-beta-refresh-note"),
+        ),
+        ui.div(
+            {"class": "similarity-beta-grid"},
+            *[
+                similarity_beta_card(ideal, i)
+                for i, ideal in enumerate(ideals)
+            ],
         ),
     )
 
@@ -2085,8 +2121,13 @@ def historical_current_comp_cards(
     return cards
 
 
-def make_historical_profile_modal(row, *, exclude_low_sample: bool = False):
+def make_historical_profile_modal(row, *, exclude_low_sample: bool = False, triton_tracker_ids=None):
     source_profile = historical_compare_profile_from_row(row)
+    triton_tracker_ids = set(triton_tracker_ids or [])
+    row_id = str(row.get("season_player_id", "") or "").strip()
+    is_tracked = row_id in triton_tracker_ids
+    tracker_label = "Remove from Triton Tracker" if is_tracked else "Add to Triton Tracker"
+    tracker_class = "pill-btn active triton-tracker-toggle" if is_tracked else "pill-btn triton-tracker-toggle"
     comp_cards = historical_current_comp_cards(
         row,
         exclude_low_sample=exclude_low_sample,
@@ -2167,7 +2208,15 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False):
         {"class": "historical-profile-grid"},
         ui.div(
             {"class": "historical-profile-col"},
-            ui.div(source_profile["player_name"], class_="player-name"),
+            ui.div(
+                ui.div(source_profile["player_name"], class_="player-name"),
+                ui.tags.button(
+                    tracker_label,
+                    class_=tracker_class,
+                    onclick=f"Shiny.setInputValue('toggle_triton_tracker',{json.dumps(row_id)},{{priority:'event'}})",
+                ) if row_id else ui.span(),
+                class_="historical-profile-name-row",
+            ),
             ui.div(
                 ui.span({"class": "team-dot", "style": f"background:{pc}"}),
                 source_profile["subtitle"],
@@ -3261,6 +3310,7 @@ def hex_to_rgba(hex_color, alpha):
 # stored shape ever changes so old payloads are ignored rather than misread.
 WATCHLIST_STORAGE_KEY = "ucsd_watchlist_player_ids_v1"
 WATCHLIST_LINEUP_STORAGE_KEY = "ucsd_watchlist_lineup_candidates_v1"
+TRITON_TRACKER_STORAGE_KEY = "ucsd_triton_tracker_historical_ids_v1"
 
 
 def watchlist_rows(player_ids):
@@ -4097,6 +4147,29 @@ app_ui = ui.page_fluid(
                 letter-spacing:.08em;
                 text-transform:uppercase;
             }
+            .pill-btn {
+                background:transparent;
+                color:var(--ink-3);
+                border:1px solid var(--rule);
+                border-radius:999px;
+                padding:6px 12px;
+                font-family:var(--sans);
+                font-size:10px;
+                font-weight:700;
+                letter-spacing:.10em;
+                text-transform:uppercase;
+                cursor:pointer;
+                transition:all .15s ease;
+            }
+            .pill-btn:hover {
+                color:var(--ink);
+                border-color:var(--ink-2);
+            }
+            .pill-btn.active {
+                color:var(--bg);
+                background:var(--accent);
+                border-color:var(--accent);
+            }
             .shot-profile-shell {
                 display:grid;
                 grid-template-columns:220px 1fr;
@@ -4202,6 +4275,22 @@ app_ui = ui.page_fluid(
             .compare-player-inline-btn {
                 white-space:nowrap;
                 flex:0 0 auto;
+            }
+            .historical-profile-name-row {
+                display:flex;
+                align-items:flex-start;
+                justify-content:space-between;
+                gap:12px;
+                margin-bottom:4px;
+            }
+            .historical-profile-name-row .player-name {
+                min-width:0;
+                margin-bottom:0;
+            }
+            .triton-tracker-toggle {
+                flex:0 0 auto;
+                margin-top:2px;
+                white-space:nowrap;
             }
             .compare-player-sub {
                 color:var(--ink-3);
@@ -5700,6 +5789,43 @@ app_ui = ui.page_fluid(
                 }}, 100);
             }})();
         """),
+        ui.tags.script(f"""
+            (function() {{
+                var KEY = {json.dumps(TRITON_TRACKER_STORAGE_KEY)};
+                function restoreTritonTracker() {{
+                    if (!window.Shiny || !window.Shiny.setInputValue || !document.body) return;
+                    if (document.body.dataset.ucsdTritonTrackerRestored === '1') return;
+                    document.body.dataset.ucsdTritonTrackerRestored = '1';
+                    var ids = [];
+                    try {{
+                        var raw = localStorage.getItem(KEY);
+                        if (raw) {{
+                            var parsed = JSON.parse(raw);
+                            if (Array.isArray(parsed)) {{
+                                ids = parsed.filter(function(v) {{ return typeof v === 'string'; }});
+                            }}
+                        }}
+                    }} catch (err) {{ ids = []; }}
+                    window.Shiny.setInputValue('triton_tracker_restore', {{ids: ids}}, {{priority: 'event'}});
+                }}
+                document.addEventListener('shiny:connected', restoreTritonTracker);
+                var tries = 0;
+                var timer = window.setInterval(function() {{
+                    if (document.body && document.body.dataset.ucsdTritonTrackerRestored === '1') {{
+                        window.clearInterval(timer);
+                        return;
+                    }}
+                    var app = window.Shiny && window.Shiny.shinyapp;
+                    var live = app && (typeof app.isConnected !== 'function' || app.isConnected());
+                    if (document.body && live && window.Shiny.setInputValue) {{
+                        restoreTritonTracker();
+                        window.clearInterval(timer);
+                        return;
+                    }}
+                    if (++tries > 600) {{ window.clearInterval(timer); }}
+                }}, 100);
+            }})();
+        """),
     ),
 
     ui.div({"id": "atlas-shell"},
@@ -5734,7 +5860,7 @@ app_ui = ui.page_fluid(
                ui.tags.button("Division III", id="btn-d3", class_="tab-btn",
                               onclick="switchTab('d3')"),
                ui.div({"class": "tab-sep"}),
-               ui.tags.button("Similarity Beta", id="btn-sim-beta", class_="tab-btn",
+               ui.tags.button("Triton Tracker", id="btn-sim-beta", class_="tab-btn",
                               onclick="switchTab('sim-beta')"),
                ui.div({"class": "tab-sep"}),
                ui.tags.button("Historical Players (beta)", id="btn-hist", class_="tab-btn",
@@ -5807,6 +5933,7 @@ app_ui = ui.page_fluid(
     ui.output_ui("watchlist_lineup_data"),
     ui.output_ui("watchlist_lineup_sync"),
     ui.output_ui("watchlist_persist"),
+    ui.output_ui("triton_tracker_persist"),
 )
 
 
@@ -5826,6 +5953,8 @@ def server(input, output, session):
     # Flipped once the browser has handed back its stored watchlist, so the
     # empty starting set is never written over what was already saved.
     watchlist_restored = reactive.Value(False)
+    triton_tracker_ids = reactive.Value(set())
+    triton_tracker_restored = reactive.Value(False)
     radar_selected = reactive.Value([])
     radar_stat_selected = reactive.Value(DEFAULT_RADAR_STAT_KEYS)
     modal_req = reactive.Value(None)
@@ -5876,14 +6005,7 @@ def server(input, output, session):
         return (cur_lo, cur_hi)
 
     def historical_row_by_id(season_player_id):
-        if not season_player_id or HISTORICAL_PLAYER_INDEX.empty:
-            return None
-        rows = HISTORICAL_PLAYER_INDEX[
-            HISTORICAL_PLAYER_INDEX["season_player_id"].eq(str(season_player_id).strip())
-        ]
-        if rows.empty:
-            return None
-        return rows.iloc[0]
+        return historical_row_by_season_player_id(season_player_id)
 
     @reactive.calc
     def hist_filtered():
@@ -6185,6 +6307,58 @@ def server(input, output, session):
           }} catch (err) {{}}
         }})();
         """)
+
+    # ── Triton Tracker restore from browser storage ──────────────────────
+    @reactive.effect
+    @reactive.event(input.triton_tracker_restore)
+    def _restore_triton_tracker():
+        payload = input.triton_tracker_restore() or {}
+        stored = payload.get("ids") or [] if isinstance(payload, dict) else []
+        restored = {
+            str(row_id).strip()
+            for row_id in stored
+            if historical_row_by_id(str(row_id).strip()) is not None
+        }
+        triton_tracker_ids.set(restored)
+        triton_tracker_restored.set(True)
+
+    @output
+    @render.ui
+    def triton_tracker_persist():
+        if not triton_tracker_restored.get():
+            return None
+        ids_json = json.dumps(sorted(triton_tracker_ids.get())).replace("</", "<\\/")
+        return ui.tags.script(f"""
+        (function() {{
+          try {{
+            localStorage.setItem({json.dumps(TRITON_TRACKER_STORAGE_KEY)}, JSON.stringify({ids_json}));
+          }} catch (err) {{}}
+        }})();
+        """)
+
+    @reactive.effect
+    @reactive.event(input.toggle_triton_tracker)
+    def _toggle_triton_tracker():
+        row_id = str(input.toggle_triton_tracker() or "").strip()
+        if not row_id or historical_row_by_id(row_id) is None:
+            return
+        curr = set(triton_tracker_ids.get())
+        curr.discard(row_id) if row_id in curr else curr.add(row_id)
+        triton_tracker_ids.set(curr)
+        source_row = historical_row_by_id(row_id)
+        if source_row is not None:
+            ui.modal_show(
+                make_historical_profile_modal(
+                    source_row,
+                    exclude_low_sample=bool(hist_modal_exclude_low_sample_state.get()),
+                    triton_tracker_ids=curr,
+                )
+            )
+
+    @output
+    @render.ui
+    def triton_tracker_ui():
+        return make_triton_tracker_content(triton_tracker_ids.get())
 
     # ── Watchlist toggle ──────────────────────────────────────────────────
     @reactive.effect
@@ -6965,6 +7139,7 @@ def server(input, output, session):
             make_historical_profile_modal(
                 source_row,
                 exclude_low_sample=bool(hist_modal_exclude_low_sample_state.get()),
+                triton_tracker_ids=triton_tracker_ids.get(),
             )
         )
 
@@ -6992,6 +7167,7 @@ def server(input, output, session):
             make_historical_profile_modal(
                 source_row,
                 exclude_low_sample=value,
+                triton_tracker_ids=triton_tracker_ids.get(),
             )
         )
 
@@ -7023,13 +7199,10 @@ def server(input, output, session):
     @reactive.effect
     @reactive.event(input.sim_beta_open_long_list)
     def _sim_beta_open_long_list():
-        board_index = pd.to_numeric(
-            pd.Series([input.sim_beta_open_long_list()]),
-            errors="coerce",
-        ).iloc[0]
-        if pd.isna(board_index):
+        source_id = str(input.sim_beta_open_long_list() or "").strip()
+        if not source_id:
             return
-        modal = make_similarity_beta_long_list_modal(int(board_index))
+        modal = make_similarity_beta_long_list_modal(source_id)
         if modal is not None:
             ui.modal_show(modal)
 
