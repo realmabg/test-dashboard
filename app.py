@@ -2131,7 +2131,13 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False, trit
     row_id = str(row.get("season_player_id", "") or "").strip()
     is_tracked = row_id in triton_tracker_ids
     tracker_label = "Remove from Triton Tracker" if is_tracked else "Add to Triton Tracker"
-    tracker_class = "pill-btn active triton-tracker-toggle" if is_tracked else "pill-btn triton-tracker-toggle"
+    tracker_class = "triton-tracker-toggle is-tracked" if is_tracked else "triton-tracker-toggle"
+    tracker_onclick = (
+        "this.classList.toggle('is-tracked');"
+        "this.textContent=this.classList.contains('is-tracked')"
+        "? 'Remove from Triton Tracker' : 'Add to Triton Tracker';"
+        f"Shiny.setInputValue('toggle_triton_tracker',{json.dumps(row_id)},{{priority:'event'}})"
+    )
     comp_cards = historical_current_comp_cards(
         row,
         exclude_low_sample=exclude_low_sample,
@@ -2217,7 +2223,7 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False, trit
                 ui.tags.button(
                     tracker_label,
                     class_=tracker_class,
-                    onclick=f"Shiny.setInputValue('toggle_triton_tracker',{json.dumps(row_id)},{{priority:'event'}})",
+                    onclick=tracker_onclick,
                 ) if row_id else ui.span(),
                 class_="historical-profile-name-row",
             ),
@@ -4295,6 +4301,28 @@ app_ui = ui.page_fluid(
                 flex:0 0 auto;
                 margin-top:2px;
                 white-space:nowrap;
+                border:1px solid rgba(240,203,103,.88);
+                background:rgba(240,203,103,.16);
+                color:#f6d776;
+                padding:10px 14px;
+                font-family:var(--mono);
+                font-size:11px;
+                font-weight:800;
+                letter-spacing:.12em;
+                text-transform:uppercase;
+                cursor:pointer;
+                box-shadow:0 0 0 1px rgba(240,203,103,.08), 0 10px 24px rgba(0,0,0,.18);
+                transition:background .14s ease, color .14s ease, border-color .14s ease, transform .14s ease;
+            }
+            .triton-tracker-toggle:hover {
+                transform:translateY(-1px);
+                background:rgba(240,203,103,.24);
+                border-color:#f6d776;
+            }
+            .triton-tracker-toggle.is-tracked {
+                background:#f0cb67;
+                color:#101722;
+                border-color:#f0cb67;
             }
             .compare-player-sub {
                 color:var(--ink-3);
@@ -6341,19 +6369,12 @@ def server(input, output, session):
         curr = set(triton_tracker_ids.get())
         curr.discard(row_id) if row_id in curr else curr.add(row_id)
         triton_tracker_ids.set(curr)
-        source_row = historical_row_by_id(row_id)
-        if source_row is not None:
-            ui.modal_show(
-                make_historical_profile_modal(
-                    source_row,
-                    exclude_low_sample=bool(hist_modal_exclude_low_sample_state.get()),
-                    triton_tracker_ids=curr,
-                )
-            )
 
     @output
     @render.ui
     def triton_tracker_ui():
+        if input.active_tab() != "sim-beta":
+            return ui.div({"class": "similarity-beta-shell"})
         return make_triton_tracker_content(triton_tracker_ids.get())
 
     # ── Watchlist toggle ──────────────────────────────────────────────────
