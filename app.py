@@ -4784,7 +4784,7 @@ app_ui = ui.page_fluid(
             }
             .similarity-beta-grid {
                 display:grid;
-                grid-template-columns:repeat(3, minmax(0, 1fr));
+                grid-template-columns:repeat(auto-fit, minmax(430px, 1fr));
                 gap:16px;
             }
             .similarity-beta-card {
@@ -5851,12 +5851,19 @@ app_ui = ui.page_fluid(
                         localStorage.setItem(KEY, JSON.stringify(ids));
                     }} catch (err) {{}}
                 }}
+                var lastSentIds = null;
                 function syncTritonTracker(force) {{
                     if (!window.Shiny || !window.Shiny.setInputValue || !document.body) return;
-                    if (!force && document.body.dataset.ucsdTritonTrackerRestored === '1') return;
-                    document.body.dataset.ucsdTritonTrackerRestored = '1';
                     var ids = readIds();
-                    window.Shiny.setInputValue('triton_tracker_restore', {{ids: ids}}, {{priority: 'event'}});
+                    var signature = JSON.stringify(ids);
+                    if (!force && document.body.dataset.ucsdTritonTrackerRestored === '1' && signature === lastSentIds) return;
+                    document.body.dataset.ucsdTritonTrackerRestored = '1';
+                    lastSentIds = signature;
+                    window.Shiny.setInputValue(
+                        'triton_tracker_restore',
+                        {{ids: ids, nonce: Date.now()}},
+                        {{priority: 'event'}}
+                    );
                 }}
                 window.ucsdSyncTritonTracker = syncTritonTracker;
                 window.ucsdToggleTritonTracker = function(id, button) {{
@@ -5875,25 +5882,26 @@ app_ui = ui.page_fluid(
                         button.textContent = isTracked ? 'Remove from Triton Tracker' : 'Add to Triton Tracker';
                     }}
                     if (window.Shiny && window.Shiny.setInputValue) {{
-                        window.Shiny.setInputValue('triton_tracker_restore', {{ids: ids}}, {{priority: 'event'}});
+                        syncTritonTracker(true);
+                        window.Shiny.setInputValue(
+                            'toggle_triton_tracker_direct',
+                            {{id: id, tracked: isTracked, nonce: Date.now()}},
+                            {{priority: 'event'}}
+                        );
                     }}
                 }};
                 document.addEventListener('shiny:connected', function() {{ syncTritonTracker(false); }});
                 var tries = 0;
                 var timer = window.setInterval(function() {{
-                    if (document.body && document.body.dataset.ucsdTritonTrackerRestored === '1') {{
-                        window.clearInterval(timer);
-                        return;
-                    }}
                     var app = window.Shiny && window.Shiny.shinyapp;
                     var live = app && (typeof app.isConnected !== 'function' || app.isConnected());
                     if (document.body && live && window.Shiny.setInputValue) {{
                         syncTritonTracker(false);
-                        window.clearInterval(timer);
+                        tries = 0;
                         return;
                     }}
                     if (++tries > 600) {{ window.clearInterval(timer); }}
-                }}, 100);
+                }}, 1000);
             }})();
         """),
     ),
