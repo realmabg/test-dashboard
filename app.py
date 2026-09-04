@@ -159,6 +159,8 @@ def load_historical_scores():
         "GP",
         "mins_per_game",
         "height_inches",
+        "eFG",
+        "FT_pct",
         "3P_pct",
         "3P_per_100_team_pos",
         "AST_TOV",
@@ -174,6 +176,10 @@ def load_historical_scores():
         "rim_assisted_pct",
         "rim_pct",
         "rim_share",
+        "mid_pct",
+        "mid_share",
+        "dunk_pct",
+        "dunk_share",
         "stops_per_40",
         "three_assisted_pct",
         "three_share",
@@ -229,6 +235,8 @@ def load_historical_player_index():
         "treb_per_game",
         "bpm",
         "height_inches",
+        "eFG",
+        "FT_pct",
         "3P_pct",
         "3P_per_100_team_pos",
         "AST_TOV",
@@ -244,6 +252,10 @@ def load_historical_player_index():
         "rim_assisted_pct",
         "rim_pct",
         "rim_share",
+        "mid_pct",
+        "mid_share",
+        "dunk_pct",
+        "dunk_share",
         "stops_per_40",
         "three_assisted_pct",
         "three_share",
@@ -1412,7 +1424,7 @@ def make_similarity_beta_tab():
                 ui.div(
                     ui.div("Similarity Beta", class_="similarity-beta-title"),
                     ui.div(
-                        "Pick a historical ideal player, then rank the current D-I pool by closest statistical profile.",
+                        "Pick a historical ideal player, then rank the current D-I pool by the tier-weighted similarity model.",
                         class_="similarity-beta-subtitle",
                     ),
                 ),
@@ -1666,6 +1678,53 @@ SIMILARITY_COMPARE_RAW_PERCENT_KEYS = {
     "Blk_pct",
     "Stl_pct",
 }
+SIMILARITY_TIER_WEIGHTS = {
+    "profile_workload": 6 / 21,
+    "shot_creation": 5 / 21,
+    "ballhandling": 4 / 21,
+    "efficiency": 3 / 21,
+    "rebounding": 2 / 21,
+    "defense": 1 / 21,
+}
+SIMILARITY_TIER_STAT_WEIGHTS = {
+    "profile_workload": {
+        "height_inches": 0.140,
+        "rim_share": 0.130,
+        "mid_share": 0.153,
+        "three_share": 0.124,
+        "dunk_share": 0.139,
+        "usg": 0.163,
+        "FTR": 0.150,
+    },
+    "shot_creation": {
+        "assisted_fg_pct": 0.310,
+        "three_assisted_pct": 0.356,
+        "rim_assisted_pct": 0.334,
+    },
+    "ballhandling": {
+        "AST_pct": 0.317,
+        "TOV_pct": 0.375,
+        "AST_TOV": 0.307,
+    },
+    "efficiency": {
+        "eFG": 0.141,
+        "FT_pct": 0.170,
+        "3P_pct": 0.168,
+        "rim_pct": 0.164,
+        "mid_pct": 0.175,
+        "dunk_pct": 0.182,
+    },
+    "rebounding": {
+        "ORB_pct": 0.500,
+        "DRB_pct": 0.500,
+    },
+    "defense": {
+        "Blk_pct": 0.256,
+        "Stl_pct": 0.244,
+        "stops_per_40": 0.221,
+        "personal_fouls_per_40": 0.279,
+    },
+}
 
 
 def _as_float(value):
@@ -1697,10 +1756,16 @@ CURRENT_TO_COMPARE_KEY = {
     "assisted_fg_pct": "assisted_fg_pct",
     "three_share": "three_share",
     "rim_share": "rim_share",
+    "mid_share": "mid_share",
+    "dunk_share": "dunk_rate_at_rim",
     "three_assisted_pct": "three_assisted_pct",
     "rim_assisted_pct": "rim_assisted_pct",
+    "eFG": "efg",
+    "FT_pct": "ft",
     "3P_pct": "tp",
     "rim_pct": "rim_fg_pct",
+    "mid_pct": "mid_fg_pct",
+    "dunk_pct": "dunk_pct",
     "FTR": "ftr",
     "ORB_pct": "orb_pct",
     "DRB_pct": "drb_pct",
@@ -1719,6 +1784,85 @@ HISTORICAL_COMPARE_GRADE_COLUMNS = [
     f"{category_key}_grade" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES
 ]
 HISTORICAL_COMPARE_FALLBACK_COLUMNS = [*CURRENT_TO_COMPARE_KEY.keys(), "height_inches"]
+
+
+def _similarity_model_value(stat_key: str, value: object):
+    num = _as_float(value)
+    if not np.isfinite(num):
+        return np.nan
+    if stat_key in SIMILARITY_COMPARE_RAW_PERCENT_KEYS and abs(num) <= 1:
+        return num * 100
+    return num
+
+
+def _apply_tier_similarity_distance(row, pool):
+    working = pool.copy()
+    working["historical_distance"] = np.nan
+    working["historical_shared_stats"] = 0
+    tier_distance_cols = []
+
+    for tier_key, stat_weights in SIMILARITY_TIER_STAT_WEIGHTS.items():
+        usable_stats = []
+        source_values = []
+        pool_columns = []
+        weights = []
+
+        for stat_key, stat_weight in stat_weights.items():
+            if stat_key not in working.columns:
+                continue
+            source_value = _similarity_model_value(stat_key, row.get(stat_key))
+            if not np.isfinite(source_value):
+                continue
+            col = pd.to_numeric(working[stat_key], errors="coerce").map(
+                lambda value: _similarity_model_value(stat_key, value)
+            )
+            mean = col.mean(skipna=True)
+            std = col.std(skipna=True, ddof=0)
+            if not np.isfinite(mean) or not np.isfinite(std) or std <= 1e-8:
+                continue
+            usable_stats.append(stat_key)
+            source_values.append((source_value - mean) / std)
+            pool_columns.append((col - mean) / std)
+            weights.append(float(stat_weight))
+
+        if not usable_stats:
+            continue
+
+        tier_values = pd.concat(pool_columns, axis=1)
+        tier_values.columns = usable_stats
+        tier_weights = np.array(weights, dtype=float)
+        tier_weights = tier_weights / tier_weights.sum()
+        source_z = np.array(source_values, dtype=float)
+        pool_z = tier_values.to_numpy(dtype=float)
+        overlap = np.isfinite(pool_z)
+        weighted_overlap = overlap * tier_weights
+        overlap_weight = weighted_overlap.sum(axis=1)
+        diffs = pool_z - source_z
+        weighted_sq = np.where(overlap, np.square(diffs) * tier_weights, 0.0).sum(axis=1)
+        tier_distance = np.where(
+            overlap_weight > 0,
+            np.sqrt(weighted_sq / overlap_weight),
+            np.nan,
+        )
+        distance_col = f"{tier_key}_tier_distance"
+        working[distance_col] = tier_distance
+        working["historical_shared_stats"] += overlap.sum(axis=1)
+        tier_distance_cols.append((distance_col, SIMILARITY_TIER_WEIGHTS[tier_key]))
+
+    if not tier_distance_cols:
+        return pd.DataFrame()
+
+    final_distance = np.zeros(len(working), dtype=float)
+    final_weight = np.zeros(len(working), dtype=float)
+    for distance_col, tier_weight in tier_distance_cols:
+        values = pd.to_numeric(working[distance_col], errors="coerce").to_numpy(dtype=float)
+        mask = np.isfinite(values)
+        final_distance[mask] += values[mask] * float(tier_weight)
+        final_weight[mask] += float(tier_weight)
+    valid = (final_weight > 0) & working["historical_shared_stats"].ge(3).to_numpy(dtype=bool)
+    working.loc[valid, "historical_distance"] = final_distance[valid] / final_weight[valid]
+    working["historical_distance_method"] = "tier_weighted"
+    return working[valid].copy()
 
 
 def _current_compare_profile_from_row(row):
@@ -2027,54 +2171,9 @@ def historical_current_comps_for_player(
     if pool.empty:
         return []
 
-    score_cols = [
-        col for col in HISTORICAL_COMPARE_SCORE_COLUMNS
-        if col in pool.columns and np.isfinite(_as_float(row.get(col)))
-    ]
-    if len(score_cols) >= 3:
-        score_pool = pool.dropna(subset=score_cols).copy()
-        if not score_pool.empty:
-            row_scores = np.array([_as_float(row.get(col)) for col in score_cols], dtype=float)
-            pool_scores = score_pool[score_cols].to_numpy(dtype=float)
-            score_pool["historical_distance"] = np.sqrt(((pool_scores - row_scores) ** 2).sum(axis=1))
-            pool = score_pool
-        else:
-            score_cols = []
-
-    if len(score_cols) < 3:
-        fallback_cols = [
-            col for col in HISTORICAL_COMPARE_FALLBACK_COLUMNS
-            if np.isfinite(_as_float(row.get(col))) and col in pool.columns
-        ]
-        if not fallback_cols:
-            return []
-        fallback_pool = pool.copy()
-        pool_values = fallback_pool[fallback_cols].to_numpy(dtype=float)
-        row_values = np.array([_as_float(row.get(col)) for col in fallback_cols], dtype=float)
-        means = np.nanmean(pool_values, axis=0)
-        stds = np.nanstd(pool_values, axis=0)
-        valid_stat_mask = np.isfinite(means) & np.isfinite(stds) & (stds > 1e-8)
-        if valid_stat_mask.sum() < 3:
-            return []
-        pool_values = pool_values[:, valid_stat_mask]
-        row_values = row_values[valid_stat_mask]
-        means = means[valid_stat_mask]
-        stds = stds[valid_stat_mask]
-        row_z = (row_values - means) / stds
-        pool_z = (pool_values - means) / stds
-        overlap_mask = np.isfinite(pool_z)
-        shared_counts = overlap_mask.sum(axis=1)
-        if not np.any(shared_counts >= 3):
-            return []
-        diffs = np.where(overlap_mask, pool_z - row_z, 0.0)
-        squared = np.square(diffs).sum(axis=1)
-        scaled = np.sqrt(squared / np.maximum(shared_counts, 1)) * np.sqrt(len(row_z))
-        fallback_pool["historical_shared_stats"] = shared_counts
-        fallback_pool["historical_distance"] = scaled
-        fallback_pool = fallback_pool[fallback_pool["historical_shared_stats"] >= 3].copy()
-        if fallback_pool.empty:
-            return []
-        pool = fallback_pool
+    pool = _apply_tier_similarity_distance(row, pool)
+    if pool.empty:
+        return []
 
     sort_cols = ["historical_distance"]
     ascending = [True]
