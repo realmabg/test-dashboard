@@ -1373,7 +1373,14 @@ def triton_tracker_ideals(saved_ids):
         row = similarity_beta_ideal_row(ideal)
         if row is not None:
             seen.add(str(row.get("season_player_id", "") or "").strip())
-    for row_id in sorted({str(value).strip() for value in saved_ids if str(value).strip()}):
+    seen_saved = set()
+    ordered_saved = []
+    for value in saved_ids:
+        row_id = str(value).strip()
+        if row_id and row_id not in seen_saved:
+            ordered_saved.append(row_id)
+            seen_saved.add(row_id)
+    for row_id in ordered_saved:
         if row_id in seen:
             continue
         if historical_row_by_season_player_id(row_id) is None:
@@ -5730,6 +5737,11 @@ app_ui = ui.page_fluid(
                 document.getElementById('btn-'+tab).classList.add('active-'+tab);
                 if (window.Shiny && window.Shiny.setInputValue) {
                     window.Shiny.setInputValue('active_tab', tab, {priority: 'event'});
+                    window.Shiny.setInputValue(
+                        tab === 'sim-beta' ? 'triton_tracker_visible' : 'triton_tracker_hidden',
+                        Date.now(),
+                        {priority: 'event'}
+                    );
                 }
 
                 requestAnimationFrame(function() {
@@ -5984,6 +5996,7 @@ def server(input, output, session):
     watchlist_restored = reactive.Value(False)
     triton_tracker_ids = reactive.Value(set())
     triton_tracker_restored = reactive.Value(False)
+    triton_tracker_visible_state = reactive.Value(False)
     radar_selected = reactive.Value([])
     radar_stat_selected = reactive.Value(DEFAULT_RADAR_STAT_KEYS)
     modal_req = reactive.Value(None)
@@ -6375,10 +6388,20 @@ def server(input, output, session):
         curr.discard(row_id) if row_id in curr else curr.add(row_id)
         triton_tracker_ids.set(curr)
 
+    @reactive.effect
+    @reactive.event(input.triton_tracker_visible)
+    def _triton_tracker_visible():
+        triton_tracker_visible_state.set(True)
+
+    @reactive.effect
+    @reactive.event(input.triton_tracker_hidden)
+    def _triton_tracker_hidden():
+        triton_tracker_visible_state.set(False)
+
     @output
     @render.ui
     def triton_tracker_ui():
-        if input.active_tab() != "sim-beta":
+        if not triton_tracker_visible_state.get():
             return ui.div({"class": "similarity-beta-shell"})
         return make_triton_tracker_content(triton_tracker_ids.get())
 
