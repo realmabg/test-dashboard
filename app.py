@@ -48,9 +48,9 @@ HISTORICAL_CURRENT_COMP_LIMIT = 5
 HISTORICAL_CURRENT_COMP_MIN_MPG = 10.0
 HISTORICAL_BETA_ARCHETYPES = ["PG / Combo", "2-4 Wing", "F/C Stretch"]
 SIMILARITY_BETA_IDEALS = [
-    {"player_name": "Nique Clifford", "team": "Colorado St.", "year": 2024},
-    {"player_name": "Bowen Born", "team": "Northern Iowa", "year": 2024},
-    {"player_name": "Tyler McGhie", "team": "UC San Diego", "year": 2024},
+    {"player_name": "Hayden Gray", "team": "UC San Diego", "year": 2025},
+    {"player_name": "Aniwaniwa Tait-Jones", "team": "UC San Diego", "year": 2025},
+    {"player_name": "Tyler McGhie", "team": "UC San Diego", "year": 2025},
 ]
 SIMILARITY_BETA_MOVEMENT = [
     [1, 0, -2, 2, -1],
@@ -1263,27 +1263,29 @@ def similarity_beta_movement(board_index: int, rank_index: int):
     return ("flat", "—")
 
 
-def similarity_beta_card(ideal, board_index: int):
-    row = similarity_beta_ideal_row(ideal)
-    comps = historical_current_comps_for_player(
-        row,
-        n_comp=HISTORICAL_CURRENT_COMP_LIMIT,
-        exclude_low_sample=True,
-    ) if row is not None else []
-    ideal_name = str(ideal.get("player_name", "Ideal Player"))
-    ideal_meta = historical_profile_subtitle(row) if row is not None else ""
-    if not ideal_meta:
-        ideal_bits = [
-            str(ideal.get("team", "")),
-            str(int(ideal.get("year"))) if np.isfinite(_as_float(ideal.get("year"))) else "",
-        ]
-        ideal_meta = " · ".join([bit for bit in ideal_bits if bit])
+def similarity_beta_compare_payload(row, comp):
+    if row is None or not comp.get("player_id"):
+        return "{}"
+    return json.dumps(
+        {
+            "source_id": str(row.get("season_player_id", "") or "").strip(),
+            "target_id": str(comp.get("player_id", "") or "").strip(),
+        }
+    )
+
+
+def similarity_beta_rows(row, comps, board_index: int, *, compact: bool = True):
     rows = []
     for i, comp in enumerate(comps):
         movement_class, movement_label = similarity_beta_movement(board_index, i)
+        payload = similarity_beta_compare_payload(row, comp)
         rows.append(
             ui.div(
-                {"class": "similarity-beta-row"},
+                {
+                    "class": "similarity-beta-row similarity-beta-row--clickable",
+                    "onclick": f"Shiny.setInputValue('hist_open_compare',{payload},{{priority:'event'}})",
+                    "title": f"Compare {row.get('player_name', 'ideal player') if row is not None else 'ideal player'} to {comp['name']}",
+                },
                 ui.div(str(comp["rank"]), class_="similarity-beta-rank"),
                 ui.div(movement_label, class_=f"similarity-beta-move {movement_class}"),
                 ui.div(
@@ -1306,6 +1308,42 @@ def similarity_beta_card(ideal, board_index: int):
                 class_="similarity-beta-empty",
             )
         )
+    return rows
+
+
+def similarity_beta_ideal_header(row, ideal):
+    ideal_name = str(ideal.get("player_name", "Ideal Player"))
+    ideal_meta = historical_profile_subtitle(row) if row is not None else ""
+    if not ideal_meta:
+        ideal_bits = [
+            str(ideal.get("team", "")),
+            str(int(ideal.get("year"))) if np.isfinite(_as_float(ideal.get("year"))) else "",
+        ]
+        ideal_meta = " · ".join([bit for bit in ideal_bits if bit])
+    return ideal_name, ideal_meta
+
+
+def similarity_beta_table_head():
+    return ui.div(
+        {"class": "similarity-beta-table-head"},
+        ui.div("#"),
+        ui.div("Δ"),
+        ui.div("Current player"),
+        ui.div("PPG"),
+        ui.div("RPG"),
+        ui.div("Dist."),
+    )
+
+
+def similarity_beta_card(ideal, board_index: int):
+    row = similarity_beta_ideal_row(ideal)
+    comps = historical_current_comps_for_player(
+        row,
+        n_comp=HISTORICAL_CURRENT_COMP_LIMIT,
+        exclude_low_sample=True,
+    ) if row is not None else []
+    ideal_name, ideal_meta = similarity_beta_ideal_header(row, ideal)
+    rows = similarity_beta_rows(row, comps, board_index)
 
     return ui.div(
         {"class": "similarity-beta-card"},
@@ -1324,16 +1362,43 @@ def similarity_beta_card(ideal, board_index: int):
             ui.div(ui.span("APG"), ui.tags.b(similarity_beta_metric(row, "ast_per_game"))),
             ui.div(ui.span("RPG"), ui.tags.b(similarity_beta_metric(row, "treb_per_game"))),
         ),
-        ui.div(
-            {"class": "similarity-beta-table-head"},
-            ui.div("#"),
-            ui.div("Δ"),
-            ui.div("Current player"),
-            ui.div("PPG"),
-            ui.div("RPG"),
-            ui.div("Dist."),
-        ),
+        similarity_beta_table_head(),
         ui.div({"class": "similarity-beta-table"}, *rows),
+        ui.tags.button(
+            "View longer list",
+            class_="similarity-beta-more",
+            onclick=f"Shiny.setInputValue('sim_beta_open_long_list',{board_index},{{priority:'event'}})",
+        ),
+    )
+
+
+def make_similarity_beta_long_list_modal(board_index: int):
+    if board_index < 0 or board_index >= len(SIMILARITY_BETA_IDEALS):
+        return None
+    ideal = SIMILARITY_BETA_IDEALS[board_index]
+    row = similarity_beta_ideal_row(ideal)
+    comps = historical_current_comps_for_player(
+        row,
+        n_comp=25,
+        exclude_low_sample=True,
+    ) if row is not None else []
+    ideal_name, ideal_meta = similarity_beta_ideal_header(row, ideal)
+    rows = similarity_beta_rows(row, comps, board_index, compact=False)
+    body = ui.div(
+        {"class": "similarity-beta-long-list"},
+        ui.div(
+            ui.div(ideal_name, class_="similarity-beta-ideal-name"),
+            ui.div(ideal_meta, class_="similarity-beta-ideal-meta"),
+            class_="similarity-beta-long-head",
+        ),
+        similarity_beta_table_head(),
+        ui.div({"class": "similarity-beta-table similarity-beta-table--long"}, *rows),
+    )
+    return ui.modal(
+        body,
+        title=ui.HTML(f"Longer Similarity List <b>· {html.escape(ideal_name)}</b>"),
+        easy_close=True,
+        size="l",
     )
 
 
@@ -4510,6 +4575,14 @@ app_ui = ui.page_fluid(
                 min-height:64px;
                 border-bottom:1px solid rgba(89,113,154,.16);
             }
+            .similarity-beta-row--clickable {
+                cursor:pointer;
+                transition:background .14s ease, border-color .14s ease;
+            }
+            .similarity-beta-row--clickable:hover {
+                background:rgba(73,106,164,.12);
+                border-color:rgba(201,214,240,.32);
+            }
             .similarity-beta-row:last-child {
                 border-bottom:none;
             }
@@ -4554,6 +4627,40 @@ app_ui = ui.page_fluid(
                 color:var(--ink-3);
                 font-family:var(--sans);
                 font-size:13px;
+            }
+            .similarity-beta-more {
+                width:100%;
+                margin-top:14px;
+                border:1px solid rgba(240,203,103,.38);
+                background:rgba(240,203,103,.08);
+                color:#f0cb67;
+                min-height:38px;
+                cursor:pointer;
+                font-family:var(--mono);
+                font-size:11px;
+                font-weight:700;
+                letter-spacing:.10em;
+                text-transform:uppercase;
+                transition:background .14s ease, border-color .14s ease;
+            }
+            .similarity-beta-more:hover {
+                background:rgba(240,203,103,.14);
+                border-color:rgba(240,203,103,.62);
+            }
+            .similarity-beta-long-list {
+                display:grid;
+                gap:14px;
+                max-height:min(76vh, 760px);
+                overflow:auto;
+                padding:4px 2px 8px;
+            }
+            .similarity-beta-long-head {
+                border:1px solid var(--rule);
+                background:rgba(19,27,41,.72);
+                padding:16px 18px;
+            }
+            .similarity-beta-table--long .similarity-beta-row {
+                min-height:58px;
             }
             @media (max-width: 1180px) {
                 .similarity-beta-grid {
@@ -6736,6 +6843,19 @@ def server(input, output, session):
                 "historical",
             )
         )
+
+    @reactive.effect
+    @reactive.event(input.sim_beta_open_long_list)
+    def _sim_beta_open_long_list():
+        board_index = pd.to_numeric(
+            pd.Series([input.sim_beta_open_long_list()]),
+            errors="coerce",
+        ).iloc[0]
+        if pd.isna(board_index):
+            return
+        modal = make_similarity_beta_long_list_modal(int(board_index))
+        if modal is not None:
+            ui.modal_show(modal)
 
     @output
     @render.text
