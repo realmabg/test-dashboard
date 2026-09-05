@@ -1367,12 +1367,8 @@ def similarity_beta_table_head():
 
 
 def triton_tracker_ideals(saved_ids):
-    ideals = list(TRITON_TRACKER_DEFAULT_IDEALS)
+    ideals = []
     seen = set()
-    for ideal in ideals:
-        row = similarity_beta_ideal_row(ideal)
-        if row is not None:
-            seen.add(str(row.get("season_player_id", "") or "").strip())
     seen_saved = set()
     ordered_saved = []
     for value in saved_ids:
@@ -1386,6 +1382,15 @@ def triton_tracker_ideals(saved_ids):
         if historical_row_by_season_player_id(row_id) is None:
             continue
         ideals.append({"season_player_id": row_id})
+        seen.add(row_id)
+    for ideal in TRITON_TRACKER_DEFAULT_IDEALS:
+        row = similarity_beta_ideal_row(ideal)
+        if row is None:
+            continue
+        row_id = str(row.get("season_player_id", "") or "").strip()
+        if row_id in seen:
+            continue
+        ideals.append(ideal)
         seen.add(row_id)
     return ideals
 
