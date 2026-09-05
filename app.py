@@ -4632,6 +4632,10 @@ app_ui = ui.page_fluid(
             .tab-panel.active {
                 flex:1; height:auto; overflow:hidden;
             }
+            #sim-beta-tab.tab-panel.active {
+                overflow-y:auto;
+                -webkit-overflow-scrolling:touch;
+            }
             #hist-tab.tab-panel.active {
                 overflow-y:auto;
             }
@@ -4805,7 +4809,8 @@ app_ui = ui.page_fluid(
                 padding:26px 28px 34px;
                 display:flex;
                 flex-direction:column;
-                gap:18px;
+                gap:14px;
+                min-height:max-content;
             }
             .similarity-beta-topbar {
                 display:flex;
@@ -4853,7 +4858,7 @@ app_ui = ui.page_fluid(
                 justify-content:space-between;
                 align-items:center;
                 gap:12px;
-                margin:22px 0 10px;
+                margin:10px 0 0;
                 color:var(--ink-2);
                 font-family:var(--mono);
                 font-size:12px;
