@@ -16,7 +16,17 @@ import math
 from pathlib import Path
 
 
-ADD_COLUMNS = ["eFG", "FT_pct", "mid_pct", "mid_share", "dunk_pct", "dunk_share"]
+ADD_COLUMNS = [
+    "eFG",
+    "FT_pct",
+    "mid_pct",
+    "mid_share",
+    "dunk_pct",
+    "dunk_share",
+    "assisted_fg_pct",
+    "three_assisted_pct",
+    "rim_assisted_pct",
+]
 
 
 def clean_key(value: str | None) -> str:
@@ -35,6 +45,12 @@ def format_num(value: float) -> str:
     if not math.isfinite(value):
         return ""
     return f"{value:.10g}"
+
+
+def ratio(numerator: float, denominator: float) -> float:
+    if not math.isfinite(numerator) or not math.isfinite(denominator) or denominator <= 0:
+        return math.nan
+    return numerator / denominator
 
 
 def build_source_lookup(source_dir: Path, years: range) -> dict[tuple[int, str, str], dict[str, str]]:
@@ -60,6 +76,18 @@ def build_source_lookup(source_dir: Path, years: range) -> dict[tuple[int, str, 
 
                 mid_share = mid_attempts / total_known_fga if math.isfinite(total_known_fga) else math.nan
                 dunk_share = to_float(row.get("dunks_attempts")) / total_known_fga if math.isfinite(total_known_fga) else math.nan
+                rim_made = to_float(row.get("pbp_rim_made"))
+                dunk_made = to_float(row.get("pbp_dunk_made"))
+                mid_made = to_float(row.get("pbp_mid_made"))
+                three_made = to_float(row.get("pbp_three_made"))
+                rim_assisted = to_float(row.get("pbp_rim_assisted"))
+                dunk_assisted = to_float(row.get("pbp_dunk_assisted"))
+                mid_assisted = to_float(row.get("pbp_mid_assisted"))
+                three_assisted = to_float(row.get("pbp_three_assisted"))
+                rim_dunk_made = rim_made + dunk_made
+                rim_dunk_assisted = rim_assisted + dunk_assisted
+                total_made = rim_dunk_made + mid_made + three_made
+                total_assisted = rim_dunk_assisted + mid_assisted + three_assisted
 
                 lookup[(year, player, team)] = {
                     "eFG": format_num(to_float(row.get("eFG"))),
@@ -68,6 +96,9 @@ def build_source_lookup(source_dir: Path, years: range) -> dict[tuple[int, str, 
                     "mid_share": format_num(mid_share),
                     "dunk_pct": format_num(to_float(row.get("dunk_pct"))),
                     "dunk_share": format_num(dunk_share),
+                    "assisted_fg_pct": format_num(ratio(total_assisted, total_made)),
+                    "three_assisted_pct": format_num(ratio(three_assisted, three_made)),
+                    "rim_assisted_pct": format_num(ratio(rim_dunk_assisted, rim_dunk_made)),
                 }
     return lookup
 
@@ -117,7 +148,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-dir", type=Path, default=Path(".."))
     parser.add_argument("--historical-dir", type=Path, default=Path("historical_comps_output"))
-    parser.add_argument("--start-year", type=int, default=2017)
+    parser.add_argument("--start-year", type=int, default=2016)
     parser.add_argument("--end-year", type=int, default=2026)
     args = parser.parse_args()
 
