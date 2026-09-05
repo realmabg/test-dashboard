@@ -1769,10 +1769,10 @@ SIMILARITY_COMPARE_CATEGORIES = [
         "Tier 1 · Height / Shot Type / Workload",
         [
             ("height_inches", "Height"),
-            ("rim_share", "Rim shot share"),
-            ("mid_share", "Midrange shot share"),
-            ("three_share", "3PT shot share"),
-            ("dunk_share", "Dunk share"),
+            ("rim_share", "Rim shot rate"),
+            ("mid_share", "Midrange shot rate"),
+            ("three_share", "3PT shot rate"),
+            ("dunk_share", "Dunk rate"),
             ("usg", "USG%"),
             ("FTR", "FTR"),
         ],
@@ -2460,9 +2460,13 @@ def make_similarity_compare_modal(
             )
 
     category_sections = []
+    omitted_missing_rows = 0
     for category_key, category_label, stats in SIMILARITY_COMPARE_CATEGORIES:
         stat_rows = []
         for stat_key, stat_label in stats:
+            if all(not np.isfinite(_as_float(profile.get(stat_key))) for profile in profiles):
+                omitted_missing_rows += 1
+                continue
             row_children = [ui.div(stat_label, class_="compare-stat-label")]
             for profile in profiles:
                 row_children.append(
@@ -2477,6 +2481,8 @@ def make_similarity_compare_modal(
                     *row_children,
                 )
             )
+        if not stat_rows:
+            continue
         category_sections.append(
             ui.div(
                 ui.div(category_label, class_="compare-section-title"),
@@ -2489,6 +2495,15 @@ def make_similarity_compare_modal(
                 class_="compare-section",
             )
         )
+
+    missing_note = (
+        ui.div(
+            "Stats missing for both compared players are hidden.",
+            class_="compare-missing-note",
+        )
+        if omitted_missing_rows
+        else ui.div()
+    )
 
     footer_buttons = []
     if source_profile.get("player_id"):
@@ -2576,6 +2591,7 @@ def make_similarity_compare_modal(
         ),
         ui.div(
             {"class": "compare-modal-shell"},
+            missing_note,
             pc_section,
             *category_sections,
         ),
@@ -3061,7 +3077,7 @@ def make_detail_modal(player_id, df, league_avg, similar_to_fn, division_label, 
                       ui.tags.b("Tick", style="color:var(--ink-2)"),
                       " = league mean.", class_="bar-note"),
                ui.div(
-                   ui.div("Shot Profile", ui.span("share · fg% · assisted%", class_="sub"), class_="col-title"),
+                   ui.div("Shot Profile", ui.span("rate · fg% · assisted%", class_="sub"), class_="col-title"),
                    ui.div(
                        {"class": "shot-profile-shell"},
                        ui.div({"class": "shot-profile-pie"}, make_shot_profile_pie_html(row, player_id)),
@@ -4391,6 +4407,15 @@ app_ui = ui.page_fluid(
             .compare-player-sub {
                 color:var(--ink-3);
                 font-size:12px;
+            }
+            .compare-missing-note {
+                border:1px dashed rgba(240,203,103,.34);
+                background:rgba(240,203,103,.06);
+                color:var(--ink-3);
+                font-family:var(--mono);
+                font-size:11px;
+                letter-spacing:.04em;
+                padding:9px 11px;
             }
             .compare-section-title {
                 font-size:11px;
