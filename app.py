@@ -1367,6 +1367,21 @@ def similarity_beta_table_head():
 
 
 def triton_tracker_ideals(saved_ids):
+    defaults = triton_tracker_default_ideals()
+    saved = triton_tracker_saved_ideals(saved_ids, seen=triton_tracker_ideal_ids(defaults))
+    return [*defaults, *saved]
+
+
+def triton_tracker_ideal_ids(ideals):
+    row_ids = set()
+    for ideal in ideals:
+        row = similarity_beta_ideal_row(ideal)
+        if row is not None:
+            row_ids.add(str(row.get("season_player_id", "") or "").strip())
+    return row_ids
+
+
+def triton_tracker_default_ideals():
     ideals = []
     seen = set()
     for ideal in TRITON_TRACKER_DEFAULT_IDEALS:
@@ -1378,6 +1393,12 @@ def triton_tracker_ideals(saved_ids):
             continue
         ideals.append(ideal)
         seen.add(row_id)
+    return ideals
+
+
+def triton_tracker_saved_ideals(saved_ids, seen=None):
+    ideals = []
+    seen = set(seen or set())
     seen_saved = set()
     ordered_saved = []
     for value in saved_ids:
@@ -1470,7 +1491,25 @@ def make_similarity_beta_tab():
 
 
 def make_triton_tracker_content(saved_ids):
-    ideals = triton_tracker_ideals(saved_ids)
+    pinned_ideals = triton_tracker_default_ideals()
+    saved_ideals = triton_tracker_saved_ideals(
+        saved_ids,
+        seen=triton_tracker_ideal_ids(pinned_ideals),
+    )
+    saved_body = (
+        ui.div(
+            {"class": "similarity-beta-grid similarity-beta-grid--tracked"},
+            *[
+                similarity_beta_card(ideal, i + len(pinned_ideals))
+                for i, ideal in enumerate(saved_ideals)
+            ],
+        )
+        if saved_ideals
+        else ui.div(
+            "No historical ideals saved yet. Add one from Historical Players (Beta).",
+            class_="similarity-beta-tracked-empty",
+        )
+    )
     return ui.div(
         {"class": "similarity-beta-shell"},
         ui.div(
@@ -1488,9 +1527,15 @@ def make_triton_tracker_content(saved_ids):
             {"class": "similarity-beta-grid"},
             *[
                 similarity_beta_card(ideal, i)
-                for i, ideal in enumerate(ideals)
+                for i, ideal in enumerate(pinned_ideals)
             ],
         ),
+        ui.div(
+            {"class": "similarity-beta-section-head"},
+            ui.div("Tracked historical ideals"),
+            ui.div(f"{len(saved_ideals)} saved", class_="similarity-beta-section-count"),
+        ),
+        saved_body,
     )
 
 
@@ -4797,6 +4842,32 @@ app_ui = ui.page_fluid(
                 border:1px solid var(--rule);
                 background:rgba(19,27,41,.72);
                 padding:18px;
+            }
+            .similarity-beta-section-head {
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+                gap:12px;
+                margin:22px 0 10px;
+                color:var(--ink-2);
+                font-family:var(--mono);
+                font-size:12px;
+                font-weight:800;
+                letter-spacing:.14em;
+                text-transform:uppercase;
+            }
+            .similarity-beta-section-count {
+                color:#f0cb67;
+                font-size:11px;
+            }
+            .similarity-beta-tracked-empty {
+                border:1px dashed rgba(240,203,103,.36);
+                background:rgba(240,203,103,.05);
+                color:var(--ink-3);
+                font-family:var(--mono);
+                font-size:12px;
+                letter-spacing:.04em;
+                padding:16px 18px;
             }
             .similarity-beta-card-head {
                 display:flex;
