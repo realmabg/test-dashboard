@@ -1524,18 +1524,23 @@ def make_triton_tracker_content(saved_ids):
             ui.div("Movement = change since last refresh", class_="similarity-beta-refresh-note"),
         ),
         ui.div(
+            {"class": "similarity-beta-section-head"},
+            ui.div("Tracked historical ideals"),
+            ui.div(f"{len(saved_ideals)} saved", class_="similarity-beta-section-count"),
+        ),
+        saved_body,
+        ui.div(
+            {"class": "similarity-beta-section-head"},
+            ui.div("Pinned UCSD ideals"),
+            ui.div("Always shown", class_="similarity-beta-section-count"),
+        ),
+        ui.div(
             {"class": "similarity-beta-grid"},
             *[
                 similarity_beta_card(ideal, i)
                 for i, ideal in enumerate(pinned_ideals)
             ],
         ),
-        ui.div(
-            {"class": "similarity-beta-section-head"},
-            ui.div("Tracked historical ideals"),
-            ui.div(f"{len(saved_ideals)} saved", class_="similarity-beta-section-count"),
-        ),
-        saved_body,
     )
 
 
