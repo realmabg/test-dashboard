@@ -2269,17 +2269,6 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False, trit
             )
         )
 
-    current_comp_cards = historical_current_comp_cards(
-        row,
-        exclude_low_sample=exclude_low_sample,
-        open_mode="compare",
-    )
-    current_comp_panel = (
-        ui.div({"class": "historical-comp-list"}, *current_comp_cards)
-        if current_comp_cards
-        else ui.div("No current-player comps are available for this profile yet.", class_="qual-note")
-    )
-
     body = ui.div(
         {"class": "historical-profile-grid"},
         ui.div(
@@ -2329,7 +2318,7 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False, trit
                         class_="historical-profile-comps-controls",
                     ),
                 ),
-                current_comp_panel,
+                ui.output_ui("hist_modal_current_comps_ui"),
                 class_="arch-score-panel historical-profile-comps",
             ),
         ),
@@ -7377,21 +7366,7 @@ def server(input, output, session):
     @reactive.event(input.hist_modal_exclude_low_sample_current)
     def _hist_modal_exclude_low_sample_current():
         value = bool(input.hist_modal_exclude_low_sample_current())
-        previous = bool(hist_modal_exclude_low_sample_state.get())
-        if value == previous:
-            return
         hist_modal_exclude_low_sample_state.set(value)
-        row_id = str(hist_modal_selected.get() or "").strip()
-        source_row = historical_row_by_id(row_id)
-        if source_row is None:
-            return
-        ui.modal_show(
-            make_historical_profile_modal(
-                source_row,
-                exclude_low_sample=value,
-                triton_tracker_ids=triton_tracker_ids.get(),
-            )
-        )
 
     @output
     @render.ui
