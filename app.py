@@ -5542,8 +5542,12 @@ app_ui = ui.page_fluid(
                 column-gap:14px;
             }
             .historical-profile-comps {
-                min-height:100%;
+                min-height:0;
                 padding:16px 16px 18px;
+            }
+            .historical-profile-comps > .shiny-bound-output {
+                display:block;
+                min-height:0;
             }
             .historical-profile-comps .historical-comp-list {
                 grid-template-columns:1fr;
