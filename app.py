@@ -4663,6 +4663,7 @@ app_ui = ui.page_fluid(
             }
             #hist-tab.tab-panel.active {
                 overflow-y:auto;
+                -webkit-overflow-scrolling:touch;
             }
 
             /* ── Guide / documentation page ────────────────────── */
@@ -5113,6 +5114,8 @@ app_ui = ui.page_fluid(
                 display:flex;
                 flex-direction:column;
                 gap:18px;
+                flex:0 0 auto;
+                min-height:min-content;
             }
             .historical-header-card,
             .historical-table-card,
@@ -5330,6 +5333,11 @@ app_ui = ui.page_fluid(
             }
             .historical-table-card {
                 overflow:auto;
+                height:clamp(360px, 50vh, 680px);
+                min-height:360px;
+                flex:0 0 auto;
+                overscroll-behavior:contain;
+                -webkit-overflow-scrolling:touch;
             }
             .historical-table {
                 width:100%;
