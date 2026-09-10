@@ -5333,11 +5333,13 @@ app_ui = ui.page_fluid(
             }
             .historical-table-card {
                 overflow:auto;
+                flex:0 0 auto;
+                -webkit-overflow-scrolling:touch;
+            }
+            .historical-results-table-card {
                 height:clamp(360px, 50vh, 680px);
                 min-height:360px;
-                flex:0 0 auto;
                 overscroll-behavior:contain;
-                -webkit-overflow-scrolling:touch;
             }
             .historical-table {
                 width:100%;
@@ -7477,7 +7479,7 @@ def server(input, output, session):
             )
 
         return ui.div(
-            {"class": "historical-table-card"},
+            {"class": "historical-table-card historical-results-table-card"},
             ui.tags.table(
                 {"class": "historical-table"},
                 ui.tags.thead(
