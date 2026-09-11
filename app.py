@@ -2868,6 +2868,11 @@ def historical_current_comp_cards(
 
 def make_historical_profile_modal(row, *, exclude_low_sample: bool = False, triton_tracker_ids=None):
     source_profile = historical_compare_profile_from_row(row)
+    initial_current_comp_cards = historical_current_comp_cards(
+        row,
+        exclude_low_sample=exclude_low_sample,
+        open_mode="compare",
+    )
     triton_tracker_ids = set(triton_tracker_ids or [])
     row_id = str(row.get("season_player_id", "") or "").strip()
     is_tracked = row_id in triton_tracker_ids
@@ -3006,11 +3011,18 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False, trit
                 ),
                 ui.div(
                     {
-                        "class": "qual-note historical-comp-list--initial"
+                        "class": (
+                            "historical-comp-list historical-comp-list--initial"
+                            if initial_current_comp_cards
+                            else "qual-note historical-comp-list--initial"
+                        )
                     },
-                    "Loading current-player comps...",
+                    *(
+                        initial_current_comp_cards
+                        if initial_current_comp_cards
+                        else ["No current-player comps are available for this profile yet."]
+                    ),
                 ),
-                ui.output_ui("hist_modal_current_comps_ui"),
                 class_="arch-score-panel historical-profile-comps",
             ),
         ),
