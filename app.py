@@ -2002,7 +2002,7 @@ def make_triton_tab():
             {"class": "triton-shell"},
             ui.div(
                 {"class": "triton-header-card"},
-                ui.div("Triton WAR Tracker", class_="triton-title"),
+                ui.div("Triton Zone", class_="triton-title"),
                 ui.div(
                     "Every D-I player scored against the staff's Triton Zone targets and ranked "
                     "by the weighted fit. Hitting a target is worth 70 on that metric, clearing it "
@@ -2154,7 +2154,7 @@ def make_triton_tab():
                 ),
                 ui.tags.details(
                     {"class": "triton-more"},
-                    ui.tags.summary("Triton WAR weights"),
+                    ui.tags.summary("Triton Zone weights"),
                     ui.div(
                         "How much each metric counts toward the score. Weights are normalised, so "
                         "only their sizes relative to each other matter — the percentage beside each "
@@ -5306,6 +5306,10 @@ app_ui = ui.page_fluid(
                 overflow-y:auto;
                 -webkit-overflow-scrolling:touch;
             }
+            #triton-tab.tab-panel.active {
+                overflow-y:auto;
+                -webkit-overflow-scrolling:touch;
+            }
 
             /* ── Guide / documentation page ────────────────────── */
             .doc-shell {
@@ -5749,12 +5753,13 @@ app_ui = ui.page_fluid(
                 }
             }
 
-            /* ── Triton WAR tracker ────────────────────────────── */
+            /* ── Triton Zone tracker ───────────────────────────── */
             .triton-shell {
                 padding:26px 28px 34px;
                 display:flex;
                 flex-direction:column;
                 gap:18px;
+                min-height:0;
             }
             .triton-header-card,
             .triton-table-card {
@@ -6037,7 +6042,10 @@ app_ui = ui.page_fluid(
                 font-size:12px;
             }
             .triton-table-card {
-                overflow-x:auto;
+                overflow:auto;
+                max-height:clamp(420px, 58vh, 760px);
+                overscroll-behavior:contain;
+                -webkit-overflow-scrolling:touch;
             }
             .triton-table {
                 width:100%;
@@ -7190,7 +7198,7 @@ app_ui = ui.page_fluid(
                ui.tags.button("Triton Tracker", id="btn-sim-beta", class_="tab-btn",
                               onclick="switchTab('sim-beta')"),
                ui.div({"class": "tab-sep"}),
-               ui.tags.button("Triton WAR", id="btn-triton", class_="tab-btn",
+               ui.tags.button("Triton Zone", id="btn-triton", class_="tab-btn",
                               onclick="switchTab('triton')"),
                ui.div({"class": "tab-sep"}),
                ui.tags.button("Historical Players (beta)", id="btn-hist", class_="tab-btn",
@@ -8676,7 +8684,7 @@ def server(input, output, session):
         head.append(sort_header("Conference", "confName"))
         head.append(sort_header("Ht", "heightIn"))
         head.append(sort_header("MPG", "mpg"))
-        head.append(sort_header("Triton WAR", "triton_war", "triton-col-war"))
+        head.append(sort_header("Triton Zone", "triton_war", "triton-col-war"))
         head.append(sort_header("Zone", "triton_checks_passed"))
         head.extend(
             sort_header(metric["label"], f"triton_val_{metric['key']}")
