@@ -47,6 +47,7 @@ HISTORICAL_TABLE_LIMIT = 25
 HISTORICAL_CURRENT_COMP_LIMIT = 5
 HISTORICAL_CURRENT_COMP_MIN_MPG = 10.0
 HISTORICAL_BETA_ARCHETYPES = ["PG / Combo", "2-4 Wing", "F/C Stretch"]
+HISTORICAL_CURRENT_COMP_CACHE = {}
 LIVE_BUILD_STAMP = "TEST BUILD 08-28-2026 · 05deefa"
 
 
@@ -2057,24 +2058,93 @@ SIMILARITY_HISTORICAL_POOL_LABELS = {
     "all": "All",
     "big_west_next_year": "Played in Big West next year",
 }
+LEGACY_SIMILARITY_SCORE_CATEGORIES = [
+    ("workload", "Workload"),
+    ("shot_style", "Shot Style"),
+    ("spacing", "Spacing"),
+    ("rim_finishing", "Rim / Finishing"),
+    ("rebounding", "Rebounding"),
+    ("defense", "Defense"),
+    ("ballhandling", "Ballhandling"),
+    ("height", "Height"),
+]
 SIMILARITY_COMPARE_CATEGORIES = [
-    ("workload", "Workload", [("usg", "USG%"), ("3P_per_100_team_pos", "3PA/100 poss"), ("assisted_fg_pct", "AST'D FG%")]),
-    ("shot_style", "Shot Style", [("three_share", "3PA share"), ("rim_share", "Rim share")]),
-    ("spacing", "Spacing", [("3P_pct", "3PT%"), ("three_assisted_pct", "3PT ast%")]),
-    ("rim_finishing", "Rim / Finishing", [("rim_pct", "Rim%"), ("FTR", "FTR"), ("rim_assisted_pct", "Rim ast%")]),
-    ("rebounding", "Rebounding", [("ORB_pct", "ORB%"), ("DRB_pct", "DRB%")]),
-    ("defense", "Defense", [("Blk_pct", "BLK%"), ("Stl_pct", "STL%"), ("personal_fouls_per_40", "PF/40"), ("stops_per_40", "Stops/40")]),
-    ("ballhandling", "Ballhandling", [("AST_pct", "AST%"), ("AST_TOV", "AST/TO"), ("TOV_pct", "TOV%")]),
-    ("height", "Height", [("height_inches", "Height")]),
+    (
+        "profile_workload",
+        "Tier 1 · Height / Shot Type / Workload",
+        [
+            ("height_inches", "Height"),
+            ("rim_share", "Rim shot rate"),
+            ("mid_share", "Midrange shot rate"),
+            ("three_share", "3PT shot rate"),
+            ("dunk_share", "Dunk rate"),
+            ("usg", "USG%"),
+            ("FTR", "FTR"),
+        ],
+    ),
+    (
+        "shot_creation",
+        "Tier 2 · How They Take Shots",
+        [
+            ("assisted_fg_pct", "Total assisted FG%"),
+            ("three_assisted_pct", "3PT assisted%"),
+            ("rim_assisted_pct", "Rim/dunk assisted%"),
+        ],
+    ),
+    (
+        "ballhandling",
+        "Tier 3 · Ballhandling",
+        [
+            ("AST_pct", "AST%"),
+            ("TOV_pct", "TOV%"),
+            ("AST_TOV", "AST/TO"),
+        ],
+    ),
+    (
+        "efficiency",
+        "Tier 4 · Efficiency",
+        [
+            ("eFG", "eFG%"),
+            ("FT_pct", "FT%"),
+            ("3P_pct", "3PT%"),
+            ("rim_pct", "Rim%"),
+            ("mid_pct", "Midrange%"),
+            ("dunk_pct", "Dunk%"),
+        ],
+    ),
+    (
+        "rebounding",
+        "Tier 5 · Rebounding",
+        [
+            ("ORB_pct", "ORB%"),
+            ("DRB_pct", "DRB%"),
+        ],
+    ),
+    (
+        "defense",
+        "Tier 6 · Defense",
+        [
+            ("Blk_pct", "BLK%"),
+            ("Stl_pct", "STL%"),
+            ("stops_per_40", "Stops/40"),
+            ("personal_fouls_per_40", "PF/40"),
+        ],
+    ),
 ]
 SIMILARITY_COMPARE_PERCENT_KEYS = {
     "assisted_fg_pct",
     "three_share",
     "rim_share",
+    "mid_share",
+    "dunk_share",
     "three_assisted_pct",
     "rim_assisted_pct",
+    "eFG",
+    "FT_pct",
     "3P_pct",
     "rim_pct",
+    "mid_pct",
+    "dunk_pct",
 }
 SIMILARITY_COMPARE_RAW_PERCENT_KEYS = {
     "usg",
@@ -2084,6 +2154,57 @@ SIMILARITY_COMPARE_RAW_PERCENT_KEYS = {
     "TOV_pct",
     "Blk_pct",
     "Stl_pct",
+}
+SIMILARITY_COMPARE_MIXED_SCALE_PERCENT_KEYS = {
+    *SIMILARITY_COMPARE_PERCENT_KEYS,
+    "usg",
+}
+SIMILARITY_TIER_WEIGHTS = {
+    "profile_workload": 6 / 21,
+    "shot_creation": 5 / 21,
+    "ballhandling": 4 / 21,
+    "efficiency": 3 / 21,
+    "rebounding": 2 / 21,
+    "defense": 1 / 21,
+}
+SIMILARITY_TIER_STAT_WEIGHTS = {
+    "profile_workload": {
+        "height_inches": 0.140,
+        "rim_share": 0.130,
+        "mid_share": 0.153,
+        "three_share": 0.124,
+        "dunk_share": 0.139,
+        "usg": 0.163,
+        "FTR": 0.150,
+    },
+    "shot_creation": {
+        "assisted_fg_pct": 0.310,
+        "three_assisted_pct": 0.356,
+        "rim_assisted_pct": 0.334,
+    },
+    "ballhandling": {
+        "AST_pct": 0.317,
+        "TOV_pct": 0.375,
+        "AST_TOV": 0.307,
+    },
+    "efficiency": {
+        "eFG": 0.141,
+        "FT_pct": 0.170,
+        "3P_pct": 0.168,
+        "rim_pct": 0.164,
+        "mid_pct": 0.175,
+        "dunk_pct": 0.182,
+    },
+    "rebounding": {
+        "ORB_pct": 0.500,
+        "DRB_pct": 0.500,
+    },
+    "defense": {
+        "Blk_pct": 0.256,
+        "Stl_pct": 0.244,
+        "stops_per_40": 0.221,
+        "personal_fouls_per_40": 0.279,
+    },
 }
 
 
@@ -2099,9 +2220,13 @@ def _format_compare_value(stat_key: str, value: object) -> str:
     if stat_key == "height_inches":
         return height_str(int(round(num)))
     if stat_key in SIMILARITY_COMPARE_PERCENT_KEYS:
-        return f"{num * 100:.1f}%"
+        if abs(num) <= 1:
+            return f"{num * 100:.1f}%"
+        return f"{num:.1f}%"
     if stat_key in SIMILARITY_COMPARE_RAW_PERCENT_KEYS:
-        return f"{num:.1f}"
+        if stat_key in SIMILARITY_COMPARE_MIXED_SCALE_PERCENT_KEYS and abs(num) <= 1:
+            num *= 100
+        return f"{num:.1f}%"
     if stat_key == "pc":
         return f"{num:.2f}"
     if stat_key in {"AST_TOV", "FTR", "3P_per_100_team_pos", "personal_fouls_per_40", "stops_per_40"}:
@@ -2114,10 +2239,16 @@ CURRENT_TO_COMPARE_KEY = {
     "assisted_fg_pct": "assisted_fg_pct",
     "three_share": "three_share",
     "rim_share": "rim_share",
+    "mid_share": "mid_share",
+    "dunk_share": "dunk_share",
     "three_assisted_pct": "three_assisted_pct",
     "rim_assisted_pct": "rim_assisted_pct",
+    "eFG": "efg",
+    "FT_pct": "ft",
     "3P_pct": "tp",
     "rim_pct": "rim_fg_pct",
+    "mid_pct": "mid_fg_pct",
+    "dunk_pct": "dunk_pct",
     "FTR": "ftr",
     "ORB_pct": "orb_pct",
     "DRB_pct": "drb_pct",
@@ -2130,12 +2261,91 @@ CURRENT_TO_COMPARE_KEY = {
     "TOV_pct": "tov_pct",
 }
 HISTORICAL_COMPARE_SCORE_COLUMNS = [
-    f"{category_key}_score" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES
+    f"{category_key}_score" for category_key, _label in LEGACY_SIMILARITY_SCORE_CATEGORIES
 ]
 HISTORICAL_COMPARE_GRADE_COLUMNS = [
-    f"{category_key}_grade" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES
+    f"{category_key}_grade" for category_key, _label in LEGACY_SIMILARITY_SCORE_CATEGORIES
 ]
 HISTORICAL_COMPARE_FALLBACK_COLUMNS = [*CURRENT_TO_COMPARE_KEY.keys(), "height_inches"]
+
+
+def _similarity_model_value(stat_key: str, value: object):
+    num = _as_float(value)
+    if not np.isfinite(num):
+        return np.nan
+    if stat_key in SIMILARITY_COMPARE_MIXED_SCALE_PERCENT_KEYS and abs(num) <= 1:
+        return num * 100
+    return num
+
+
+def _apply_tier_similarity_distance(row, pool):
+    working = pool.copy()
+    working["historical_distance"] = np.nan
+    working["historical_shared_stats"] = 0
+    tier_distance_cols = []
+
+    for tier_key, stat_weights in SIMILARITY_TIER_STAT_WEIGHTS.items():
+        usable_stats = []
+        source_values = []
+        pool_columns = []
+        weights = []
+
+        for stat_key, stat_weight in stat_weights.items():
+            if stat_key not in working.columns:
+                continue
+            source_value = _similarity_model_value(stat_key, row.get(stat_key))
+            if not np.isfinite(source_value):
+                continue
+            col = pd.to_numeric(working[stat_key], errors="coerce").map(
+                lambda value: _similarity_model_value(stat_key, value)
+            )
+            mean = col.mean(skipna=True)
+            std = col.std(skipna=True, ddof=0)
+            if not np.isfinite(mean) or not np.isfinite(std) or std <= 1e-8:
+                continue
+            usable_stats.append(stat_key)
+            source_values.append((source_value - mean) / std)
+            pool_columns.append((col - mean) / std)
+            weights.append(float(stat_weight))
+
+        if not usable_stats:
+            continue
+
+        tier_values = pd.concat(pool_columns, axis=1)
+        tier_values.columns = usable_stats
+        tier_weights = np.array(weights, dtype=float)
+        tier_weights = tier_weights / tier_weights.sum()
+        source_z = np.array(source_values, dtype=float)
+        pool_z = tier_values.to_numpy(dtype=float)
+        overlap = np.isfinite(pool_z)
+        weighted_overlap = overlap * tier_weights
+        overlap_weight = weighted_overlap.sum(axis=1)
+        diffs = pool_z - source_z
+        weighted_sq = np.where(overlap, np.square(diffs) * tier_weights, 0.0).sum(axis=1)
+        tier_distance = np.where(
+            overlap_weight > 0,
+            np.sqrt(weighted_sq / overlap_weight),
+            np.nan,
+        )
+        distance_col = f"{tier_key}_tier_distance"
+        working[distance_col] = tier_distance
+        working["historical_shared_stats"] += overlap.sum(axis=1)
+        tier_distance_cols.append((distance_col, SIMILARITY_TIER_WEIGHTS[tier_key]))
+
+    if not tier_distance_cols:
+        return pd.DataFrame()
+
+    final_distance = np.zeros(len(working), dtype=float)
+    final_weight = np.zeros(len(working), dtype=float)
+    for distance_col, tier_weight in tier_distance_cols:
+        values = pd.to_numeric(working[distance_col], errors="coerce").to_numpy(dtype=float)
+        mask = np.isfinite(values)
+        final_distance[mask] += values[mask] * float(tier_weight)
+        final_weight[mask] += float(tier_weight)
+    valid = (final_weight > 0) & working["historical_shared_stats"].ge(3).to_numpy(dtype=bool)
+    working.loc[valid, "historical_distance"] = final_distance[valid] / final_weight[valid]
+    working["historical_distance_method"] = "tier_weighted"
+    return working[valid].copy()
 
 
 def _current_compare_profile_from_row(row):
@@ -2426,6 +2636,16 @@ def historical_current_comps_for_player(
     n_comp: int = HISTORICAL_CURRENT_COMP_LIMIT,
     exclude_low_sample: bool = False,
 ):
+    cache_key = (
+        str(row.get("season_player_id", "") or "").strip(),
+        int(n_comp),
+        bool(exclude_low_sample),
+    )
+    if cache_key[0]:
+        cached = HISTORICAL_CURRENT_COMP_CACHE.get(cache_key)
+        if cached is not None:
+            return [dict(comp) for comp in cached]
+
     if HISTORICAL_CURRENT_POOL.empty:
         return []
     pool = HISTORICAL_CURRENT_POOL.copy()
@@ -2444,54 +2664,9 @@ def historical_current_comps_for_player(
     if pool.empty:
         return []
 
-    score_cols = [
-        col for col in HISTORICAL_COMPARE_SCORE_COLUMNS
-        if col in pool.columns and np.isfinite(_as_float(row.get(col)))
-    ]
-    if len(score_cols) >= 3:
-        score_pool = pool.dropna(subset=score_cols).copy()
-        if not score_pool.empty:
-            row_scores = np.array([_as_float(row.get(col)) for col in score_cols], dtype=float)
-            pool_scores = score_pool[score_cols].to_numpy(dtype=float)
-            score_pool["historical_distance"] = np.sqrt(((pool_scores - row_scores) ** 2).sum(axis=1))
-            pool = score_pool
-        else:
-            score_cols = []
-
-    if len(score_cols) < 3:
-        fallback_cols = [
-            col for col in HISTORICAL_COMPARE_FALLBACK_COLUMNS
-            if np.isfinite(_as_float(row.get(col))) and col in pool.columns
-        ]
-        if not fallback_cols:
-            return []
-        fallback_pool = pool.copy()
-        pool_values = fallback_pool[fallback_cols].to_numpy(dtype=float)
-        row_values = np.array([_as_float(row.get(col)) for col in fallback_cols], dtype=float)
-        means = np.nanmean(pool_values, axis=0)
-        stds = np.nanstd(pool_values, axis=0)
-        valid_stat_mask = np.isfinite(means) & np.isfinite(stds) & (stds > 1e-8)
-        if valid_stat_mask.sum() < 3:
-            return []
-        pool_values = pool_values[:, valid_stat_mask]
-        row_values = row_values[valid_stat_mask]
-        means = means[valid_stat_mask]
-        stds = stds[valid_stat_mask]
-        row_z = (row_values - means) / stds
-        pool_z = (pool_values - means) / stds
-        overlap_mask = np.isfinite(pool_z)
-        shared_counts = overlap_mask.sum(axis=1)
-        if not np.any(shared_counts >= 3):
-            return []
-        diffs = np.where(overlap_mask, pool_z - row_z, 0.0)
-        squared = np.square(diffs).sum(axis=1)
-        scaled = np.sqrt(squared / np.maximum(shared_counts, 1)) * np.sqrt(len(row_z))
-        fallback_pool["historical_shared_stats"] = shared_counts
-        fallback_pool["historical_distance"] = scaled
-        fallback_pool = fallback_pool[fallback_pool["historical_shared_stats"] >= 3].copy()
-        if fallback_pool.empty:
-            return []
-        pool = fallback_pool
+    pool = _apply_tier_similarity_distance(row, pool)
+    if pool.empty:
+        return []
 
     sort_cols = ["historical_distance"]
     ascending = [True]
@@ -2518,6 +2693,8 @@ def historical_current_comps_for_player(
                 "profile": _current_compare_profile_from_row(comp),
             }
         )
+    if cache_key[0]:
+        HISTORICAL_CURRENT_COMP_CACHE[cache_key] = [dict(comp) for comp in comps]
     return comps
 
 
@@ -5613,6 +5790,13 @@ app_ui = ui.page_fluid(
             }
             .historical-table-card {
                 overflow:auto;
+                flex:0 0 auto;
+                -webkit-overflow-scrolling:touch;
+            }
+            .historical-results-table-card {
+                height:clamp(360px, 50vh, 680px);
+                min-height:360px;
+                overscroll-behavior:contain;
             }
             .historical-table {
                 width:100%;
@@ -5815,8 +5999,12 @@ app_ui = ui.page_fluid(
                 column-gap:14px;
             }
             .historical-profile-comps {
-                min-height:100%;
+                min-height:0;
                 padding:16px 16px 18px;
+            }
+            .historical-profile-comps > .shiny-bound-output {
+                display:block;
+                min-height:0;
             }
             .historical-profile-comps .historical-comp-list {
                 grid-template-columns:1fr;
@@ -7942,7 +8130,7 @@ def server(input, output, session):
             )
 
         return ui.div(
-            {"class": "historical-table-card"},
+            {"class": "historical-table-card historical-results-table-card"},
             ui.tags.table(
                 {"class": "historical-table"},
                 ui.tags.thead(
