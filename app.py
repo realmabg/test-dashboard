@@ -5537,6 +5537,11 @@ app_ui = ui.page_fluid(
                 gap:14px;
                 min-height:max-content;
             }
+            #triton_tracker_ui.recalculating,
+            #triton_tracker_ui.recalculating .similarity-beta-shell {
+                opacity:1 !important;
+                pointer-events:auto !important;
+            }
             .similarity-beta-topbar {
                 display:flex;
                 justify-content:space-between;
