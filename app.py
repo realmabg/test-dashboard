@@ -312,8 +312,8 @@ def build_historical_current_pool():
         if row_key in current_players.columns:
             current_players[compare_key] = pd.to_numeric(current_players[row_key], errors="coerce")
     current_players["height_inches"] = pd.to_numeric(current_players.get("heightIn"), errors="coerce")
-    score_cols = [f"{category_key}_score" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES]
-    grade_cols = [f"{category_key}_grade" for category_key, _label, _stats in SIMILARITY_COMPARE_CATEGORIES]
+    score_cols = HISTORICAL_COMPARE_SCORE_COLUMNS
+    grade_cols = HISTORICAL_COMPARE_GRADE_COLUMNS
     for col in [*score_cols, *grade_cols]:
         if col not in current_players.columns:
             current_players[col] = np.nan
@@ -328,7 +328,8 @@ def build_historical_current_pool():
     current_scores["team_key"] = current_scores["team"].map(normalize_lookup_key)
     current_scores["team_key_robust"] = current_scores["team"].map(normalize_team_lookup_key)
 
-    keep_cols = ["name_key", "team_key", "team_key_robust", *score_cols, *grade_cols]
+    optional_score_cols = [col for col in [*score_cols, *grade_cols] if col in current_scores.columns]
+    keep_cols = ["name_key", "team_key", "team_key_robust", *optional_score_cols]
     merged = current_players.merge(
         current_scores[keep_cols],
         on=["name_key", "team_key", "team_key_robust"],
