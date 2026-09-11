@@ -7688,6 +7688,22 @@ def server(input, output, session):
         triton_tracker_ids.set(curr)
 
     @reactive.effect
+    @reactive.event(input.toggle_triton_tracker_direct)
+    def _toggle_triton_tracker_direct():
+        payload = input.toggle_triton_tracker_direct() or {}
+        if not isinstance(payload, dict):
+            return
+        row_id = str(payload.get("id", "") or "").strip()
+        if not row_id or historical_row_by_id(row_id) is None:
+            return
+        curr = set(triton_tracker_ids.get())
+        if bool(payload.get("tracked")):
+            curr.add(row_id)
+        else:
+            curr.discard(row_id)
+        triton_tracker_ids.set(curr)
+
+    @reactive.effect
     @reactive.event(input.triton_tracker_visible)
     def _triton_tracker_visible():
         triton_tracker_visible_state.set(True)
@@ -7700,8 +7716,6 @@ def server(input, output, session):
     @output
     @render.ui
     def triton_tracker_ui():
-        if (input.active_tab() or "d1") != "sim-beta":
-            return ui.div({"class": "similarity-beta-shell"})
         return make_triton_tracker_content(triton_tracker_ids.get())
 
     # ── Watchlist toggle ──────────────────────────────────────────────────
