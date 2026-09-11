@@ -2920,11 +2920,19 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False, trit
             {"class": "historical-profile-col"},
             ui.div(
                 ui.div(source_profile["player_name"], class_="player-name"),
-                ui.tags.button(
-                    tracker_label,
-                    class_=tracker_class,
-                    onclick=tracker_onclick,
-                ) if row_id else ui.span(),
+                ui.div(
+                    ui.tags.button(
+                        "Close",
+                        class_="historical-profile-close",
+                        **{"data-bs-dismiss": "modal", "type": "button"},
+                    ),
+                    ui.tags.button(
+                        tracker_label,
+                        class_=tracker_class,
+                        onclick=tracker_onclick,
+                    ) if row_id else ui.span(),
+                    class_="historical-profile-actions",
+                ),
                 class_="historical-profile-name-row",
             ),
             ui.div(
@@ -5036,6 +5044,33 @@ app_ui = ui.page_fluid(
             .historical-profile-name-row .player-name {
                 min-width:0;
                 margin-bottom:0;
+            }
+            .historical-profile-actions {
+                flex:0 0 auto;
+                display:flex;
+                align-items:flex-start;
+                gap:8px;
+                flex-wrap:wrap;
+                justify-content:flex-end;
+            }
+            .historical-profile-close {
+                flex:0 0 auto;
+                margin-top:2px;
+                border:1px solid var(--rule-2);
+                background:rgba(73,106,164,.10);
+                color:var(--ink);
+                min-height:40px;
+                padding:10px 14px;
+                cursor:pointer;
+                font-family:var(--mono);
+                font-size:11px;
+                font-weight:800;
+                letter-spacing:.12em;
+                text-transform:uppercase;
+            }
+            .historical-profile-close:hover {
+                border-color:var(--ink-2);
+                background:rgba(73,106,164,.18);
             }
             .triton-tracker-toggle {
                 flex:0 0 auto;
