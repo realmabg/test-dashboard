@@ -5759,7 +5759,6 @@ app_ui = ui.page_fluid(
                 display:flex;
                 flex-direction:column;
                 gap:18px;
-                min-height:0;
             }
             .triton-header-card,
             .triton-table-card {
@@ -6042,10 +6041,7 @@ app_ui = ui.page_fluid(
                 font-size:12px;
             }
             .triton-table-card {
-                overflow:auto;
-                max-height:clamp(420px, 58vh, 760px);
-                overscroll-behavior:contain;
-                -webkit-overflow-scrolling:touch;
+                overflow-x:auto;
             }
             .triton-table {
                 width:100%;
