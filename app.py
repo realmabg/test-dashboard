@@ -5072,16 +5072,17 @@ app_ui = ui.page_fluid(
                 flex:0 0 auto;
             }
             .historical-profile-name-row {
-                display:grid;
-                grid-template-columns:minmax(0, 1fr) auto;
-                align-items:flex-start;
-                gap:12px;
+                display:flex;
+                flex-direction:column-reverse;
+                align-items:stretch;
+                gap:14px;
                 margin-bottom:4px;
             }
             .historical-profile-name-row .player-name {
                 min-width:0;
                 margin-bottom:0;
-                overflow-wrap:anywhere;
+                overflow-wrap:normal;
+                word-break:normal;
                 hyphens:auto;
             }
             .historical-profile-actions {
@@ -5089,8 +5090,8 @@ app_ui = ui.page_fluid(
                 align-items:flex-start;
                 gap:8px;
                 flex-wrap:wrap;
-                justify-content:flex-end;
-                max-width:min(100%, 360px);
+                justify-content:flex-start;
+                max-width:100%;
             }
             .historical-profile-close {
                 flex:0 0 auto;
@@ -5118,11 +5119,12 @@ app_ui = ui.page_fluid(
                 border:1px solid rgba(240,203,103,.88);
                 background:rgba(240,203,103,.16);
                 color:#f6d776;
-                padding:10px 14px;
+                min-height:40px;
+                padding:10px 12px;
                 font-family:var(--mono);
-                font-size:11px;
+                font-size:10px;
                 font-weight:800;
-                letter-spacing:.12em;
+                letter-spacing:.10em;
                 text-transform:uppercase;
                 cursor:pointer;
                 box-shadow:0 0 0 1px rgba(240,203,103,.08), 0 10px 24px rgba(0,0,0,.18);
@@ -5139,9 +5141,6 @@ app_ui = ui.page_fluid(
                 border-color:#f0cb67;
             }
             @media (max-width: 780px) {
-                .historical-profile-name-row {
-                    grid-template-columns:1fr;
-                }
                 .historical-profile-actions {
                     justify-content:flex-start;
                 }
