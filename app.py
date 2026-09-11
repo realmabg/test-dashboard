@@ -2613,6 +2613,35 @@ def _similarity_model_value(stat_key: str, value: object):
     return num
 
 
+def _similarity_model_series(stat_key: str, values) -> pd.Series:
+    numeric = pd.to_numeric(values, errors="coerce").astype("float64")
+    if stat_key in SIMILARITY_COMPARE_MIXED_SCALE_PERCENT_KEYS:
+        numeric = numeric.where(numeric.abs() > 1, numeric * 100)
+    return numeric
+
+
+def _build_current_similarity_norms(pool: pd.DataFrame) -> dict:
+    stat_keys = {
+        stat_key
+        for stat_weights in SIMILARITY_TIER_STAT_WEIGHTS.values()
+        for stat_key in stat_weights
+        if stat_key in pool.columns
+    }
+    norms = {}
+    for stat_key in stat_keys:
+        col = _similarity_model_series(stat_key, pool[stat_key])
+        mean = col.mean(skipna=True)
+        std = col.std(skipna=True, ddof=0)
+        if not np.isfinite(mean) or not np.isfinite(std) or std <= 1e-8:
+            continue
+        norms[stat_key] = {
+            "mean": float(mean),
+            "std": float(std),
+            "z": (col - mean) / std,
+        }
+    return norms
+
+
 def _apply_tier_similarity_distance(row, pool):
     working = pool.copy()
     working["historical_distance"] = np.nan
@@ -2631,16 +2660,24 @@ def _apply_tier_similarity_distance(row, pool):
             source_value = _similarity_model_value(stat_key, row.get(stat_key))
             if not np.isfinite(source_value):
                 continue
-            col = pd.to_numeric(working[stat_key], errors="coerce").map(
-                lambda value: _similarity_model_value(stat_key, value)
-            )
-            mean = col.mean(skipna=True)
-            std = col.std(skipna=True, ddof=0)
-            if not np.isfinite(mean) or not np.isfinite(std) or std <= 1e-8:
+            norm = HISTORICAL_CURRENT_SIMILARITY_NORMS.get(stat_key, {})
+            mean = norm.get("mean", np.nan)
+            std = norm.get("std", np.nan)
+            pool_z_col = norm.get("z")
+            if pool_z_col is None or not np.isfinite(mean) or not np.isfinite(std) or std <= 1e-8:
+                col = _similarity_model_series(stat_key, working[stat_key])
+                mean = col.mean(skipna=True)
+                std = col.std(skipna=True, ddof=0)
+                if not np.isfinite(mean) or not np.isfinite(std) or std <= 1e-8:
+                    continue
+                pool_z = (col - mean) / std
+            else:
+                pool_z = pool_z_col.reindex(working.index)
+            if pool_z.isna().all():
                 continue
             usable_stats.append(stat_key)
             source_values.append((source_value - mean) / std)
-            pool_columns.append((col - mean) / std)
+            pool_columns.append(pool_z)
             weights.append(float(stat_weight))
 
         if not usable_stats:
@@ -2703,6 +2740,7 @@ def _current_compare_profile_from_row(row):
 
 
 HISTORICAL_CURRENT_POOL = build_historical_current_pool()
+HISTORICAL_CURRENT_SIMILARITY_NORMS = _build_current_similarity_norms(HISTORICAL_CURRENT_POOL)
 HISTORICAL_FILTER_YEARS = (
     sorted(
         [
@@ -2830,11 +2868,6 @@ def historical_current_comp_cards(
 
 def make_historical_profile_modal(row, *, exclude_low_sample: bool = False, triton_tracker_ids=None):
     source_profile = historical_compare_profile_from_row(row)
-    initial_current_comp_cards = historical_current_comp_cards(
-        row,
-        exclude_low_sample=exclude_low_sample,
-        open_mode="compare",
-    )
     triton_tracker_ids = set(triton_tracker_ids or [])
     row_id = str(row.get("season_player_id", "") or "").strip()
     is_tracked = row_id in triton_tracker_ids
@@ -2973,17 +3006,9 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False, trit
                 ),
                 ui.div(
                     {
-                        "class": (
-                            "historical-comp-list historical-comp-list--initial"
-                            if initial_current_comp_cards
-                            else "qual-note historical-comp-list--initial"
-                        )
+                        "class": "qual-note historical-comp-list--initial"
                     },
-                    *(
-                        initial_current_comp_cards
-                        if initial_current_comp_cards
-                        else ["No current-player comps are available for this profile yet."]
-                    ),
+                    "Loading current-player comps...",
                 ),
                 ui.output_ui("hist_modal_current_comps_ui"),
                 class_="arch-score-panel historical-profile-comps",
