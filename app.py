@@ -5072,23 +5072,25 @@ app_ui = ui.page_fluid(
                 flex:0 0 auto;
             }
             .historical-profile-name-row {
-                display:flex;
+                display:grid;
+                grid-template-columns:minmax(0, 1fr) auto;
                 align-items:flex-start;
-                justify-content:space-between;
                 gap:12px;
                 margin-bottom:4px;
             }
             .historical-profile-name-row .player-name {
                 min-width:0;
                 margin-bottom:0;
+                overflow-wrap:anywhere;
+                hyphens:auto;
             }
             .historical-profile-actions {
-                flex:0 0 auto;
                 display:flex;
                 align-items:flex-start;
                 gap:8px;
                 flex-wrap:wrap;
                 justify-content:flex-end;
+                max-width:min(100%, 360px);
             }
             .historical-profile-close {
                 flex:0 0 auto;
@@ -5135,6 +5137,14 @@ app_ui = ui.page_fluid(
                 background:#f0cb67;
                 color:#101722;
                 border-color:#f0cb67;
+            }
+            @media (max-width: 780px) {
+                .historical-profile-name-row {
+                    grid-template-columns:1fr;
+                }
+                .historical-profile-actions {
+                    justify-content:flex-start;
+                }
             }
             .compare-player-sub {
                 color:var(--ink-3);
