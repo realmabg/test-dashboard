@@ -2830,6 +2830,11 @@ def historical_current_comp_cards(
 
 def make_historical_profile_modal(row, *, exclude_low_sample: bool = False, triton_tracker_ids=None):
     source_profile = historical_compare_profile_from_row(row)
+    initial_current_comp_cards = historical_current_comp_cards(
+        row,
+        exclude_low_sample=exclude_low_sample,
+        open_mode="compare",
+    )
     triton_tracker_ids = set(triton_tracker_ids or [])
     row_id = str(row.get("season_player_id", "") or "").strip()
     is_tracked = row_id in triton_tracker_ids
@@ -2956,6 +2961,20 @@ def make_historical_profile_modal(row, *, exclude_low_sample: bool = False, trit
                             value=exclude_low_sample,
                         ),
                         class_="historical-profile-comps-controls",
+                    ),
+                ),
+                ui.div(
+                    {
+                        "class": (
+                            "historical-comp-list historical-comp-list--initial"
+                            if initial_current_comp_cards
+                            else "qual-note historical-comp-list--initial"
+                        )
+                    },
+                    *(
+                        initial_current_comp_cards
+                        if initial_current_comp_cards
+                        else ["No current-player comps are available for this profile yet."]
                     ),
                 ),
                 ui.output_ui("hist_modal_current_comps_ui"),
@@ -6650,6 +6669,12 @@ app_ui = ui.page_fluid(
             .historical-profile-comps > .shiny-bound-output {
                 display:block;
                 min-height:0;
+            }
+            .historical-profile-comps > .shiny-bound-output:empty {
+                display:none;
+            }
+            .historical-profile-comps:has(> .shiny-bound-output:not(:empty)) > .historical-comp-list--initial {
+                display:none;
             }
             .historical-profile-comps .historical-comp-list {
                 grid-template-columns:1fr;
