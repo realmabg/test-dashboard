@@ -8951,8 +8951,6 @@ def server(input, output, session):
         row_id = str(input.hist_select_row() or "").strip()
         if not row_id:
             return
-        hist_selected.set(row_id)
-        hist_modal_selected.set(row_id)
         hist_modal_exclude_low_sample_state.set(False)
         source_row = historical_row_by_id(row_id)
         if source_row is None:
