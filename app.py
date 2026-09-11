@@ -7053,6 +7053,42 @@ app_ui = ui.page_fluid(
                 sync();
             }
 
+            function historicalScrollState() {
+                var panel = document.getElementById('hist-tab');
+                var table = document.querySelector('.historical-results-table-card');
+                return {
+                    panelTop: panel ? panel.scrollTop : 0,
+                    tableTop: table ? table.scrollTop : 0,
+                    tableLeft: table ? table.scrollLeft : 0
+                };
+            }
+
+            function restoreHistoricalScrollState(state) {
+                if (!state) return;
+                var restore = function() {
+                    var panel = document.getElementById('hist-tab');
+                    var table = document.querySelector('.historical-results-table-card');
+                    if (panel) panel.scrollTop = state.panelTop || 0;
+                    if (table) {
+                        table.scrollTop = state.tableTop || 0;
+                        table.scrollLeft = state.tableLeft || 0;
+                    }
+                };
+                restore();
+                window.requestAnimationFrame(function() {
+                    restore();
+                    window.requestAnimationFrame(restore);
+                });
+            }
+
+            window.ucsdOpenHistoricalProfile = function(rowId) {
+                window.__historicalScrollState = historicalScrollState();
+                if (window.Shiny && window.Shiny.setInputValue) {
+                    window.Shiny.setInputValue('hist_select_row', rowId, {priority:'event'});
+                }
+                restoreHistoricalScrollState(window.__historicalScrollState);
+            };
+
             function bindDocumentScatterClicks() {
                 if (!document.body || document.body.dataset.codexGlobalScatterBound === '1') return;
                 document.addEventListener('click', function(ev) {
@@ -7140,6 +7176,9 @@ app_ui = ui.page_fluid(
                     window.requestAnimationFrame(updateHistoricalHeightSliderLabels);
                 }
                 initHistoricalHeightSliderFormatting();
+                if (window.__historicalScrollState) {
+                    restoreHistoricalScrollState(window.__historicalScrollState);
+                }
             }, true);
             window.setInterval(styleHistoricalSelectize, 1000);
             window.setInterval(updateHistoricalHeightSliderLabels, 1000);
@@ -9035,7 +9074,7 @@ def server(input, output, session):
                 ui.tags.tr(
                     {
                         "class": f"historical-row{selected_cls}",
-                        "onclick": f"Shiny.setInputValue('hist_select_row',{json.dumps(row_id)},{{priority:'event'}})",
+                        "onclick": f"window.ucsdOpenHistoricalProfile && window.ucsdOpenHistoricalProfile({json.dumps(row_id)})",
                     },
                     ui.tags.td(
                         ui.div(str(row["player_name"]), class_="historical-table-player"),
