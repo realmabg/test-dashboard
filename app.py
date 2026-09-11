@@ -1659,22 +1659,23 @@ def similarity_beta_movement(board_index: int, rank_index: int):
     return ("flat", "—")
 
 
-def similarity_beta_compare_payload(row, comp):
+def similarity_beta_compare_payload(row, comp, *, return_to: str = ""):
     if row is None or not comp.get("player_id"):
         return "{}"
-    return json.dumps(
-        {
-            "source_id": str(row.get("season_player_id", "") or "").strip(),
-            "target_id": str(comp.get("player_id", "") or "").strip(),
-        }
-    )
+    payload = {
+        "source_id": str(row.get("season_player_id", "") or "").strip(),
+        "target_id": str(comp.get("player_id", "") or "").strip(),
+    }
+    if return_to:
+        payload["return_to"] = return_to
+    return json.dumps(payload)
 
 
-def similarity_beta_rows(row, comps, board_index: int, *, compact: bool = True):
+def similarity_beta_rows(row, comps, board_index: int, *, compact: bool = True, return_to: str = ""):
     rows = []
     for i, comp in enumerate(comps):
         movement_class, movement_label = similarity_beta_movement(board_index, i)
-        payload = similarity_beta_compare_payload(row, comp)
+        payload = similarity_beta_compare_payload(row, comp, return_to=return_to)
         rows.append(
             ui.div(
                 {
@@ -1833,7 +1834,7 @@ def make_similarity_beta_long_list_modal(source_id: str):
         exclude_low_sample=True,
     )
     ideal_name, ideal_meta = similarity_beta_ideal_header(row, {})
-    rows = similarity_beta_rows(row, comps, 0, compact=False)
+    rows = similarity_beta_rows(row, comps, 0, compact=False, return_to="triton_tracker_long_list")
     body = ui.div(
         {"class": "similarity-beta-long-list"},
         ui.div(
@@ -3127,6 +3128,7 @@ def make_similarity_compare_modal(
     target_profile,
     comparison_origin: str = "historical",
     future_profile=None,
+    return_source_id: str = "",
 ):
     profiles = [source_profile, target_profile]
     if future_profile and str(future_profile.get("player_name", "")).strip():
@@ -3237,6 +3239,13 @@ def make_similarity_compare_modal(
             )
         )
 
+    if comparison_origin == "triton_tracker_long_list" and return_source_id:
+        close_input = "sim_beta_open_long_list"
+        close_value = return_source_id
+    else:
+        close_input = "modal_compare_back"
+        close_value = source_profile.get("player_id", "")
+
     body = ui.div(
         {"id": "compare-detail-body"},
         ui.tags.script(
@@ -3252,7 +3261,7 @@ def make_similarity_compare_modal(
                       window.__compareModalNavigating = false;
                       return;
                     }}
-                    Shiny.setInputValue('modal_compare_back', {json.dumps(source_profile.get("player_id", ""))}, {{priority:'event'}});
+                    Shiny.setInputValue({json.dumps(close_input)}, {json.dumps(close_value)}, {{priority:'event'}});
                   }}, {{ once: true }});
                 }}, 0);
                 """
@@ -3277,7 +3286,7 @@ def make_similarity_compare_modal(
                             },
                             "Full stats",
                         ) if (
-                            comparison_origin == "historical"
+                            comparison_origin in {"historical", "triton_tracker_long_list"}
                             and idx == 1
                             and profile.get("player_id")
                         ) else ui.div(),
@@ -9011,12 +9020,15 @@ def server(input, output, session):
             return
         source_profile = historical_compare_profile_from_row(source_row)
         target_profile = _current_compare_profile_from_row(target_rows.iloc[0])
+        return_to = str(payload.get("return_to", "") or "").strip()
+        compare_origin = "triton_tracker_long_list" if return_to == "triton_tracker_long_list" else "historical"
         compare_req.set(payload)
         ui.modal_show(
             make_similarity_compare_modal(
                 source_profile,
                 target_profile,
-                "historical",
+                compare_origin,
+                return_source_id=source_id if compare_origin == "triton_tracker_long_list" else "",
             )
         )
 
