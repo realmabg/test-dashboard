@@ -6566,7 +6566,7 @@ def server(input, output, session):
     @output
     @render.ui
     def triton_tracker_ui():
-        if not triton_tracker_visible_state.get():
+        if (input.active_tab() or "d1") != "sim-beta":
             return ui.div({"class": "similarity-beta-shell"})
         return make_triton_tracker_content(triton_tracker_ids.get())
 
