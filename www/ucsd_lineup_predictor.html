@@ -1938,6 +1938,91 @@ const SLOT_LABELS = ['PG', 'SG', 'SF', 'PF', 'C'];
 let MODEL_DATA = null;
 let ORTG_MODEL = null;
 
+const BOSS_NOTE_OVERRIDES = {
+  beath: `Beath is UCSD's most complete two-way player. His steal rate and block production at 6-8 give the lineup real wing-defense value. The main offensive concern is whether the 3PT shot stabilizes enough to keep spacing clean; with Suutela providing interior presence, Beath can play more off-ball and hunt efficient touches.`,
+  beattie: `The engine of this team. Beattie combines legit creation with defensive activity, and the roster works best when he does not have to carry every initiation burden. Dotson/Barno-style secondary handling should let him spend more possessions attacking bent defenses instead of creating from a standstill.`,
+  chaikin: `Chaikin is the cleanest movement-shooting fit on the roster. His value rises sharply in lineups with downhill guards and interior finishers because defenses have to stay attached. The defensive floor is the tradeoff, so he needs enough Beath/Vance/Suutela support around him.`,
+  burke: `Burke's best path is as a defense-first wing who can survive offensively if the shot regresses upward. If the 3PT percentage lands closer to his broader profile, he becomes a useful connector; if not, his minutes are more matchup-driven.`,
+  vance: `Vance has the physical profile worth betting on: 6-6, defensive event creation, and enough on-ball flashes to imagine a sophomore jump. His role is probably earned through defense first, with offensive growth deciding whether he closes games.`,
+  vukicevic: `Vukicevic changes the defensive geometry as a true 7-footer. The finishing and rim protection are useful in short bursts, while free throws and spacing make him more of a matchup interior specialist than an every-lineup center right now.`,
+  pendleton: `Pendleton's rim-protection indicators give him situational value, but the offensive efficiency is the limiting factor. With more frontcourt depth on the roster, his cleanest role is as a defensive specialist in specific matchups.`,
+  brooks: `Brooks has a small-sample profile, but the low-turnover guard signal is interesting. If he earns real rotation minutes, his ball security gives UCSD a different backup-guard look next to higher-usage creators.`,
+  dotson: `Excellent addition. Dotson brings the exact secondary-creator/shooter profile this roster needed: real 3PT volume, enough assist creation to take pressure off Beattie, and the ability to punish help. Turnovers are the swing skill.`,
+  suutela: `Suutela is the most direct frontcourt upgrade. The efficiency profile travels well because it is built on finishing, touch, and a workable jumper rather than pure usage. In lineups with Chaikin/Dotson-type spacing, he becomes one of the cleaner Big West frontcourt scoring options.`,
+  barno: `Barno is the playmaking bet. His assist rate gives UCSD another pressure point, and his rim pressure matters, but the shooting has to come up enough that teams cannot duck under every action. Best case: he becomes the downhill guard this roster otherwise lacks.`,
+  eaglestaff: `Eaglestaff is the premium wing outcome in this player pool: size, volume shooting, and high-major reps. If the defense holds up, he fits almost any lineup construction as a 3-and-D starter.`,
+  holmes: `Holmes is an unusual freshman profile because the production comes from adult/pro context rather than a normal prep track. Treat the rate stats as estimates, but the archetype is useful: efficient, low-mistake stretch forward with enough size to play next to either Beath or Suutela.`,
+  johnson: `Johnson is the JUCO upside swing. The shooting volume and assist-to-turnover profile are the reasons to care; the question is how much survives the jump in defensive size and speed. If the shot translates, he is a real rotation guard.`
+};
+
+const BOSS_STATIC_PLAYERS = {
+  dunn: {
+    name: 'Tyson Dunn', num: 3, pos: 'PG', yr: 'Sr', ht: '6-3',
+    bpr: -3.8, obpr: -1.7, dbpr: -2.1, fromConf: 'mac',
+    prpgi: 0.7, ts: 51.8, usg: 27.9, threeRate: 0.57, threePct: 32.9,
+    arate: 38.9, stl: 2.5, blk: 1.1, dreb: 12.3, htIn: 75,
+    team: 'UC San Diego',
+    note: `Dunn sat out last season at UCSD after transferring from Buffalo. His 2024-25 Buffalo season shows a legitimate playmaking profile: an ARate of 38.9 ranked among the best guard creation marks in the country, and he gives this roster a true PG who can make the game easier for others. The concern is efficiency, especially a 51.8 TS% profile and a high-volume 3PT diet. The optimistic read is that his conference-only shooting was better than the full-season line; the cautious read is that the long layoff makes the translation uncertain.`
+  },
+  fakeolavi: {
+    name: 'Fake Olavi', num: 99, pos: 'C/PF', yr: 'So', ht: '6-10',
+    bpr: -1.7, obpr: -1.2, dbpr: -0.4, fromConf: 'wcc',
+    prpgi: 1.0, ts: 63.7, usg: 16.4, threeRate: 0.40, threePct: 34.0,
+    arate: 10.9, torate: 12.0, stl: 1.4, blk: 0.8, dreb: 10.8, oreb: 7.4,
+    ftr: 47.4, htIn: 82,
+    note: `<strong>Potential Addition — Hypothetical projection.</strong> Same base profile as Olavi Suutela, but with an upgraded 3PT line: 34.0% on real volume. The higher three-point rate meaningfully improves spacing in any lineup he's in. The point of this player is not scouting certainty; it is a controlled lineup experiment for what a stretchier Suutela-type frontcourt piece does to spacing and projected offense.`
+  },
+  gharram: {
+    name: 'Yassine Gharram', num: 36, pos: 'PG/SG', yr: 'Sr', ht: '6-3',
+    bpr: 0.5, obpr: 0.0, dbpr: 0.5, fromConf: 'ivy',
+    prpgi: 0.4, ts: 68.4, usg: 16.8, threeRate: 0.46, threePct: 47.1,
+    arate: 36.2, torate: 15.8, stl: 1.4, blk: 1.5, dreb: 23.5, oreb: 5.6,
+    ftr: 15.6, htIn: 75,
+    team: 'Yale',
+    note: `<strong>Potential Addition — Yale (Ivy League), Sr · Wing G · 6-3.</strong> Gharram is one of the more interesting creation bets on the board. The headline is the ARate: 36.2 is elite for a guard/wing profile, and the recent shooting sample is loud even if the career 3PT baseline demands regression. The upside case is a connector who can pass, rebound down, and punish help. The concern is sample size and whether the jumper is actually a new level or just a short hot stretch.`
+  },
+  ttcarr: {
+    name: 'TT Carr', num: 0, pos: 'PG/SG', yr: 'Fr', ht: '6-0',
+    bpr: 0.2, obpr: -1.1, dbpr: 1.3, fromConf: 'acc',
+    prpgi: 0.9, ts: 48.0, usg: 15.3, threeRate: 0.35, threePct: 25.7,
+    arate: 23.3, torate: 14.0, stl: 1.5, blk: 0.7, dreb: 12.2, oreb: 4.4,
+    ftr: 52.3, htIn: 72,
+    team: 'California',
+    note: `<strong>Potential Addition — Cal (ACC), Fr → So · Combo G · 6-0.</strong> Carr is the high-major upside swing. He played real freshman minutes in a difficult ACC environment, drew fouls at a strong rate, and showed enough creation instinct to project as more than a spot-up guard. The shooting is the obvious blocker: 25.7% from three makes him a spacing risk right now. If the jumper develops, the recruit pedigree plus creation/foul pressure gives him one of the higher ceilings in this group.`
+  },
+  lawson: {
+    name: 'Josiah Lawson', num: 2, pos: 'SF/PF', yr: 'So', ht: '6-7',
+    bpr: 3.4, adjBpr: 0.8, obpr: 2.3, dbpr: 1.1, fromConf: 'd2',
+    prpgi: 2.5, ts: 55.5, usg: 18.0, threeRate: 0.30, threePct: 34.1,
+    arate: 9.0, torate: 12.0, stl: 1.8, blk: 0.7, dreb: 11.0, oreb: 6.0,
+    ftr: 30.0, htIn: 79,
+    team: 'Morehouse',
+    d2projection: true,
+    projFloor: { mpg: 18, ppg: 4.8, rpg: 1.5, apg: 0.5, threePct: 34.1, efg: 52.1, ft: 76.0 },
+    projBase: { mpg: 22, ppg: 5.9, rpg: 1.8, apg: 0.6, threePct: 34.1, efg: 52.1, ft: 76.0 },
+    projCeiling: { mpg: 27, ppg: 7.2, rpg: 2.2, apg: 0.7, threePct: 34.1, efg: 52.1, ft: 76.0 },
+    note: `<strong>Potential Addition — Morehouse (NCAA D2), So · SF/PF · 6-7.</strong> Lawson is the D2 translation bet: a 6-7 forward with shooting indicators, real efficiency, and enough rebounding to fit the positional need. Treat the adjusted BPM as manual/high-variance because D2 production does not live on the same scale as the D1 model. The upside is a useful bench wing-forward who can shoot 34%+ from three and survive on the glass; the risk is that the athletic jump compresses the role quickly.`
+  }
+};
+
+function applyBossPlayerOverlay() {
+  Object.entries(BOSS_NOTE_OVERRIDES).forEach(([id, note]) => {
+    if (PLAYERS[id]) PLAYERS[id].note = note;
+  });
+
+  Object.entries(BOSS_STATIC_PLAYERS).forEach(([id, player]) => {
+    const enriched = {
+      ...player,
+      id,
+      isPotential: true,
+      isBossStatic: true,
+      adjBpr: player.adjBpr ?? confAdj(player.bpr, player.fromConf),
+      confAdj: CONF_STRENGTH[(player.fromConf || '').toLowerCase()] || 0
+    };
+    PLAYERS[id] = PLAYERS[id] ? { ...PLAYERS[id], ...enriched } : enriched;
+  });
+}
+
 async function loadModelData() {
   const res = await fetch('ucsd_model_data.json');
   const data = await res.json();
@@ -1950,6 +2035,7 @@ async function loadModelData() {
     p.adjBpr = confAdj(p.bpr, p.fromConf);
     PLAYERS[id] = p;
   });
+  applyBossPlayerOverlay();
   // Shim field names the existing Portal-tab code (renderPortal/portalAddToLineup) expects.
   PORTAL_PLAYERS = data.portal.map(p => ({
     ...p,
@@ -2077,12 +2163,14 @@ function renderRosterPanel() {
   html += returners.map(([id, p]) => playerRowHtml(id, p)).join('');
   html += '<div class="group-label" style="color: var(--gold);">New Additions (2026-27 roster)</div>';
   html += newAdds.map(([id, p]) => playerRowHtml(id, p, { gold: true, badge: p.fromConf, school: p.priorSchool })).join('');
-  html += '<div class="group-label" style="color: var(--muted); margin-top: 8px;">Potential Additions — real available (uncommitted) transfers, ranked by BPM</div>';
+  html += '<div class="group-label" style="color: var(--muted); margin-top: 8px;">Potential Additions — portal, watchlist, and curated static players, ranked by BPM</div>';
   html += potential.map(([id, p]) => {
     const school = p.isWatchlistPotential
       ? [p.team, p.conf ? '(' + p.conf + ')' : '', p.division].filter(Boolean).join(' ')
+      : p.isBossStatic
+        ? [p.team || p.priorSchool, p.fromConf ? '(' + p.fromConf + ')' : '', 'Boss list'].filter(Boolean).join(' ')
       : p.priorSchool + ' (' + p.fromConf + ')';
-    const badge = p.isWatchlistPotential ? 'Watchlist' : null;
+    const badge = p.isWatchlistPotential ? 'Watchlist' : (p.isBossStatic ? 'Boss list' : null);
     return playerRowHtml(id, p, { muted: true, school, badge });
   }).join('');
   el.innerHTML = html;
